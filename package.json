@@ -1,0 +1,40 @@
+{
+  "name": "norcini-workbench",
+  "version": "0.7.4",
+  "description": "Local-first research workbench: filesystem, Org, code, rendered documents, and a real Bash terminal.",
+  "main": "src/main.js",
+  "author": "Norcini Workbench",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "pack:mac": "electron-builder --mac --dir",
+    "rebuild:native": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "xterm": "5.3.0",
+    "xterm-addon-fit": "0.8.0"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12",
+    "@electron/rebuild": "^3.7.2"
+  },
+  "build": {
+    "appId": "org.norcini.workbench",
+    "productName": "Norcini Workbench",
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}
