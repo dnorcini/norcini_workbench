@@ -279,6 +279,13 @@ ipcMain.handle('open-external', async (_event, url) => {
   return { ok: true };
 });
 
+ipcMain.handle('open-default', async (_event, vpath) => {
+  const abs = resolveVirtual(vpath);
+  const error = await shell.openPath(abs);
+  if (error) throw new Error(error);
+  return { ok: true };
+});
+
 ipcMain.handle('new-note', async (_event, { category, title, dated, date }) => {
   if (!NOTE_CATEGORIES.has(category)) throw new Error('Unknown category');
   const cleanTitle = String(title || '').trim();

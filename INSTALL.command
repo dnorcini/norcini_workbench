@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "Norcini Workbench Desktop 0.7 installer"
+echo "Norcini Workbench Desktop 0.8.0 installer"
 echo
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then

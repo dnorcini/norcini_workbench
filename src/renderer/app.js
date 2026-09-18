@@ -6,6 +6,9 @@ let editorVisible = false;
 let contextTarget = null;
 let terminalId = null;
 let fsTimer = null;
+let navHistory = [];
+let navIndex = -1;
+let navigatingHistory = false;
 
 const workspace = document.getElementById('workspace');
 const tree = document.getElementById('fileTree');
@@ -22,6 +25,10 @@ const runBtn = document.getElementById('runBtn');
 const buildBtn = document.getElementById('buildBtn');
 const runNotebookBtn = document.getElementById('runNotebookBtn');
 const terminalStatus = document.getElementById('terminalStatus');
+const activePath = document.getElementById('activePath');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+const openDefaultBtn = document.getElementById('openDefaultBtn');
 
 const term = new Terminal({
   cursorBlink:true,
@@ -69,9 +76,32 @@ function updateContextActions(){
   buildBtn.hidden=ext!=='.tex';
   runNotebookBtn.hidden=ext!=='.ipynb';
 }
-async function loadDir(vpath){
+function updateNavigation(){
+  backBtn.disabled=navIndex<=0;
+  forwardBtn.disabled=navIndex<0||navIndex>=navHistory.length-1;
+  activePath.textContent=currentPath||currentDir||'Norcini Workbench';
+  activePath.title=activePath.textContent;
+}
+function recordLocation(type,path){
+  if(navigatingHistory)return;
+  const prev=navHistory[navIndex];
+  if(prev&&prev.type===type&&prev.path===path){updateNavigation();return}
+  navHistory=navHistory.slice(0,navIndex+1);
+  navHistory.push({type,path});
+  navIndex=navHistory.length-1;
+  updateNavigation();
+}
+async function goHistory(delta){
+  const next=navIndex+delta;if(next<0||next>=navHistory.length)return;
+  if(!(await maybeAbandon()))return;
+  navigatingHistory=true;navIndex=next;
+  try{const item=navHistory[navIndex];if(item.type==='dir')await loadDir(item.path,false);else await openFile(item.path,false)}
+  finally{navigatingHistory=false;updateNavigation()}
+}
+async function loadDir(vpath,record=true){
   const data=await window.workbench.listDir(vpath);
   currentDir=data.path.endsWith('/')?data.path:data.path+'/';
+  if(record) recordLocation('dir',currentDir); else updateNavigation();
   breadcrumbs.textContent=currentDir;
   tree.innerHTML='';
   if(!/^[^:]+:\/$/.test(currentDir)){
@@ -97,10 +127,11 @@ async function maybeAbandon(){
   if(!dirty)return true;
   return confirm('You have unsaved changes. Discard them?');
 }
-async function openFile(vpath){
+async function openFile(vpath,record=true){
   if(currentPath!==vpath && !(await maybeAbandon()))return;
   const data=await window.workbench.readFile(vpath);
   currentPath=vpath;currentHash=data.sha256;markDirty(false);
+  if(record) recordLocation('file',vpath); else updateNavigation();
   document.querySelectorAll('.file-row').forEach(r=>r.classList.toggle('selected',r.dataset.path===vpath));
   editorTitle.textContent=vpath;
   editor.readOnly=data.binary;
@@ -381,7 +412,10 @@ document.getElementById('terminalRestartBtn').onclick=createTerminal;
 document.getElementById('saveBtn').onclick=saveCurrent;
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveCurrent()}});
 document.getElementById('refreshPreviewBtn').onclick=refreshPreview;
-document.getElementById('refreshFilesBtn').onclick=()=>loadDir(currentDir);
+document.getElementById('refreshFilesBtn').onclick=()=>loadDir(currentDir,false);
+backBtn.onclick=()=>goHistory(-1);
+forwardBtn.onclick=()=>goHistory(1);
+openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
 document.getElementById('toggleEditorBtn').onclick=()=>setEditorVisible(!editorVisible);
 document.getElementById('homeBtn').onclick=async()=>{await loadDir('org:/');try{await openFile('org:/home.org')}catch{}};
 document.querySelectorAll('.root-tab').forEach(btn=>btn.onclick=async()=>{
@@ -411,8 +445,8 @@ document.getElementById('newNoteForm').onsubmit=async e=>{
 
 window.workbench.onFsChanged(()=>{
   clearTimeout(fsTimer);fsTimer=setTimeout(async()=>{
-    try{await loadDir(currentDir)}catch{}
-    if(currentPath && !dirty){try{await openFile(currentPath)}catch{}}
+    try{await loadDir(currentDir,false)}catch{}
+    if(currentPath && !dirty){try{await openFile(currentPath,false)}catch{}}
   },300)
 });
 
@@ -433,5 +467,6 @@ function setupResizers(){
   setupResizers();setEditorVisible(false);
   await loadDir('org:/');
   try{await openFile('org:/home.org')}catch{await refreshPreview()}
+  updateNavigation();
   await createTerminal();
 })();

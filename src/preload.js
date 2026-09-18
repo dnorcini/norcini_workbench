@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('workbench', {
   move: (payload) => ipcRenderer.invoke('move', payload),
   reveal: (p) => ipcRenderer.invoke('reveal', p),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  openDefault: (p) => ipcRenderer.invoke('open-default', p),
   newNote: (payload) => ipcRenderer.invoke('new-note', payload),
   toggleOrgLine: (payload) => ipcRenderer.invoke('toggle-org-line', payload),
   buildCommand: (p) => ipcRenderer.invoke('build-command', p),

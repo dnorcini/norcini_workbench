@@ -1,7 +1,7 @@
 {
   "name": "norcini-workbench",
-  "version": "0.7.4",
-  "description": "Local-first research workbench: filesystem, Org, code, rendered documents, and a real Bash terminal.",
+  "version": "0.8.0",
+  "description": "Local-first academic research workbench for filesystem, Org, PDFs, code, notebooks, LaTeX, and a real Bash terminal.",
   "main": "src/main.js",
   "author": "Norcini Workbench",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "productName": "Norcini Workbench",
     "files": [
       "src/**/*",
+      "assets/**/*",
       "node_modules/**/*",
       "package.json"
     ],
@@ -34,7 +35,8 @@
       "category": "public.app-category.developer-tools",
       "target": [
         "dir"
-      ]
+      ],
+      "icon": "assets/icon.png"
     }
   }
 }

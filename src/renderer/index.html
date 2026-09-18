@@ -9,9 +9,17 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">Norcini Workbench <span class="version">Desktop 0.7.4</span></div>
-    <div class="top-actions">
+    <div class="brand-group">
+      <div class="app-mark">NW</div>
+      <div class="brand">Norcini Workbench <span class="version">0.8.0</span></div>
+    </div>
+    <div class="nav-actions">
+      <button id="backBtn" class="icon-btn" title="Back" disabled>‹</button>
+      <button id="forwardBtn" class="icon-btn" title="Forward" disabled>›</button>
       <button id="homeBtn">Home</button>
+    </div>
+    <div id="activePath" class="active-path">org:/home.org</div>
+    <div class="top-actions">
       <button id="newNoteBtn">+ New note</button>
       <button id="toggleEditorBtn">Quick edit</button>
       <button id="terminalHereBtn">Terminal here</button>
@@ -59,6 +67,7 @@
           <button id="runBtn" hidden>Run</button>
           <button id="buildBtn" hidden>Build PDF</button>
           <button id="runNotebookBtn" hidden>Run notebook</button>
+          <button id="openDefaultBtn">Open in macOS</button>
           <button id="refreshPreviewBtn">Refresh</button>
         </div>
       </div>
@@ -68,7 +77,7 @@
     <div id="terminalResize" class="resize-h"></div>
 
     <section id="terminalPane" class="panel terminal-pane">
-      <div class="panel-header">
+      <div class="panel-header terminal-header">
         <span>Terminal <span class="muted">Bash</span> <span id="terminalStatus" class="terminal-status">starting…</span></span>
         <div class="header-actions">
           <button id="terminalRestartBtn">Restart</button>
@@ -85,30 +94,15 @@
       <h2>New note</h2>
       <label>Category
         <select id="noteCategory">
-          <option>meetings</option>
-          <option>lab_notebook</option>
-          <option>logs</option>
-          <option selected>reference</option>
-          <option>teaching</option>
-          <option>personal</option>
-          <option>household</option>
-          <option>archive</option>
+          <option>meetings</option><option>lab_notebook</option><option>logs</option>
+          <option selected>reference</option><option>teaching</option><option>personal</option>
+          <option>household</option><option>archive</option>
         </select>
       </label>
-      <label>Title
-        <input id="noteTitle" required>
-      </label>
-      <label class="checkline">
-        <input id="noteDated" type="checkbox" checked>
-        <span>Dated note</span>
-      </label>
-      <label>Date
-        <input id="noteDate" type="date">
-      </label>
-      <div class="dialog-actions">
-        <button type="button" id="cancelNoteBtn">Cancel</button>
-        <button type="submit" class="primary">Create</button>
-      </div>
+      <label>Title <input id="noteTitle" required></label>
+      <label class="checkline"><input id="noteDated" type="checkbox" checked><span>Dated note</span></label>
+      <label>Date <input id="noteDate" type="date"></label>
+      <div class="dialog-actions"><button type="button" id="cancelNoteBtn">Cancel</button><button type="submit" class="primary">Create</button></div>
     </form>
   </dialog>
 
