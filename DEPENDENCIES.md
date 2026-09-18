@@ -1,24 +1,40 @@
 # Dependencies
 
-The authoritative dependency versions are `package.json` plus `package-lock.json`. Use `npm install` rather than manually installing individual packages.
+Norcini Workbench is intentionally small. The application has no database and no local server.
 
-Core runtime dependencies:
+## Required to build
 
-- Electron: desktop shell and Chromium renderer
-- node-pty: real interactive Bash PTY
-- xterm: terminal UI
-- xterm-addon-fit: fits the terminal to the resizable pane
+- macOS
+- Node.js and npm
+- Xcode Command Line Tools when `node-pty` needs native compilation
 
-Build dependencies:
+Check:
 
-- electron-builder: macOS `.app` packaging
-- @electron/rebuild: rebuilds native `node-pty` for Electron's ABI
+```bash
+node --version
+npm --version
+xcode-select -p
+```
 
-External tools are optional and discovered from normal macOS/Homebrew locations: Python 3, R/Rscript, Jupyter, `latexmk` or `pdflatex`.
+## Application dependencies
 
-For a reproducible install, do not delete or casually regenerate `package-lock.json`.
+| Package | Version | Role |
+| --- | --- | --- |
+| Electron | 44.4.3 | macOS desktop shell and Chromium renderer |
+| node-pty | ^1.1.0 | real pseudo-terminal backend |
+| xterm | 5.3.0 | terminal renderer |
+| xterm-addon-fit | 0.8.0 | fit terminal to pane |
+| @electron/rebuild | 4.2.0 | rebuild native modules for Electron's ABI |
+| electron-builder | ^26.0.12 | package the macOS `.app`, DMG, and ZIP |
 
+## External tools used when available
 
-## 0.8.1 security baseline
+Workbench launches ordinary command-line tools rather than bundling replacements. Depending on what you do, this may include Bash, Python, R, Jupyter, LaTeX, Git, SSH, or Emacs.
 
-The runtime/toolchain refresh pins Electron to `44.4.3` and `@electron/rebuild` to `4.2.0`. `node-pty` remains at stable 1.1.0. Because the build environment used to prepare this source archive could not reliably reach the npm registry, a new lockfile is intentionally not fabricated here. Run `npm install` on the target Mac, verify `npm audit`, then commit the generated `package-lock.json` to the repository.
+LaTeX lookup includes `/Library/TeX/texbin` and common Homebrew/system locations.
+
+## Lockfile
+
+After the first successful `npm install`, keep the generated `package-lock.json` in the repository. It is part of the reproducible build record.
+
+Do not routinely use `npm audit fix --force`. Major dependency changes should be explicit, documented, and tested against the PTY terminal.

@@ -1,21 +1,51 @@
 # Development
 
-Run the development app with `npm start`.
+## Normal development loop
 
-Important files:
+```bash
+npm install
+npm start
+```
 
-- `src/main.js`: Electron main process, filesystem IPC, file watching, PTY, run/build commands
-- `src/preload.js`: renderer IPC bridge
-- `src/renderer/index.html`: application shell
-- `src/renderer/style.css`: layout and GitHub-inspired light theme
-- `src/renderer/app.js`: file navigation, rendering, editing, terminal UI
-- `assets/icon.png`: packaging icon source
+Application source lives under `src/`.
 
-Development rules:
+- `src/main.js` owns native filesystem, PTY, shell, and packaging-facing behavior.
+- `src/preload.js` exposes the controlled IPC bridge.
+- `src/renderer/` owns the visible desktop interface.
+- `assets/icon.png` is the canonical application/Dock icon source.
 
-- preserve the real Bash PTY path unless a change is specifically intended to replace it
-- keep filesystem operations explicit and reversible
-- do not introduce a Workbench content database
-- keep privileged filesystem/process access in the main process
-- prefer small releases from a known-good baseline
-- test terminal typing and interactive behavior after every Electron/native-module upgrade
+## Do not casually replace the PTY path
+
+Electron 0.7.4 established the stable terminal architecture:
+
+```text
+xterm -> preload IPC -> Electron main -> node-pty -> /bin/bash -l
+```
+
+That path is foundational. UI work should not replace it with `exec`, a fake command box, or a browser terminal abstraction.
+
+## Versioning
+
+Keep `main` usable. Mark known-good releases with annotated Git tags such as:
+
+```bash
+git tag -a v0.8.1 -m "Norcini Workbench v0.8.1"
+git push origin v0.8.1
+```
+
+Use branches for substantial experiments. Tauri is not an active development target unless explicitly revived.
+
+## Packaging checks
+
+Before calling a version stable:
+
+1. `npm audit`
+2. `npm start`
+3. terminal typing / Tab / history / Ctrl-C
+4. Terminal Here
+5. Org rendering and Quick Edit
+6. PDF preview
+7. Python or shell execution
+8. LaTeX build if available
+9. `npm run pack:mac`
+10. launch the packaged `.app` from Finder or `/Applications`

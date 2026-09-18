@@ -2,33 +2,55 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "Norcini Workbench Desktop 0.8.0 installer"
-echo
+printf '\nNorcini Workbench 0.8.1\n'
+printf '=======================\n\n'
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "Node.js/npm are required to build the desktop app."
-  echo "Install Node with Homebrew, then run this installer again:"
+  echo "Node.js/npm are required for the one-time build."
+  echo "Install Node, then run INSTALL.command again."
   echo
-  echo "  brew install node"
+  echo "With Homebrew:  brew install node"
   echo
-  read -p "Press Return to close..."
+  read -r -p "Press Return to close..."
   exit 1
 fi
 
-echo "Installing dependencies..."
+echo "1/3 Installing pinned dependencies and rebuilding node-pty..."
 npm install
 
 echo
-echo "Building the macOS app..."
-npm run pack:mac
+echo "2/3 Running the dependency audit..."
+npm audit || true
 
 echo
-echo "Build complete."
-APP=$(find dist -maxdepth 3 -name "Norcini Workbench.app" -print -quit 2>/dev/null || true)
-if [ -n "$APP" ]; then
-  echo "App: $APP"
-  open -R "$APP"
+echo "3/3 Building the macOS application..."
+npm run pack:mac
+
+APP=$(find dist -maxdepth 4 -name "Norcini Workbench.app" -print -quit 2>/dev/null || true)
+if [ -z "$APP" ]; then
+  echo "Build finished, but the .app could not be located automatically. Check ./dist."
+  read -r -p "Press Return to close..."
+  exit 0
 fi
 
 echo
-read -p "Press Return to close..."
+echo "Built: $APP"
+open -R "$APP"
+
+echo
+read -r -p "Copy Norcini Workbench.app to /Applications now? [y/N] " ANSWER
+case "$ANSWER" in
+  y|Y|yes|YES)
+    echo "Copying to /Applications..."
+    rm -rf "/Applications/Norcini Workbench.app"
+    cp -R "$APP" "/Applications/Norcini Workbench.app"
+    echo "Installed: /Applications/Norcini Workbench.app"
+    open "/Applications/Norcini Workbench.app"
+    ;;
+  *)
+    echo "Not installed. You can drag the .app to Applications later."
+    ;;
+esac
+
+echo
+read -r -p "Press Return to close..."

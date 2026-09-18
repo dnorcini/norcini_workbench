@@ -7,10 +7,10 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist:mac": "electron-builder --mac",
-    "pack:mac": "electron-builder --mac --dir",
     "rebuild:native": "electron-rebuild -f -w node-pty",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "pack:mac": "electron-builder --mac --dir",
+    "dist:mac": "electron-builder --mac dmg zip"
   },
   "dependencies": {
     "node-pty": "^1.1.0",
@@ -25,18 +25,22 @@
   "build": {
     "appId": "org.norcini.workbench",
     "productName": "Norcini Workbench",
+    "artifactName": "Norcini-Workbench-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "src/**/*",
-      "assets/**/*",
-      "node_modules/**/*",
+      "assets/icon.png",
       "package.json"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.png",
       "target": [
-        "dir"
-      ],
-      "icon": "assets/icon.png"
+        "dmg",
+        "zip"
+      ]
     }
   }
 }

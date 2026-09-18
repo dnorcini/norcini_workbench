@@ -1,18 +1,76 @@
-# Rebuild on a clean Mac
+# Rebuild Norcini Workbench on a clean Mac
 
-1. Install Apple Xcode Command Line Tools.
-2. Install a current Node.js/npm compatible with this repository. Record any future required version here before upgrading the project.
-3. Copy or clone the Workbench source tree.
-4. In Terminal, `cd` into the source tree.
-5. Run `npm install`. This also rebuilds `node-pty` for Electron.
-6. Run `npm start` and verify the embedded Bash terminal accepts typing, Tab, history arrows, and Ctrl-C.
-7. Run `npm run pack:mac`.
-8. Launch the generated `Norcini Workbench.app` from `dist/`.
-9. Move the tested app to `/Applications` or `~/Applications`.
+This file is the shortest path from source code to a normal macOS application.
 
-Before changing Electron versions, make a known-good source snapshot. Native PTY compatibility is the highest-risk dependency boundary.
+## 1. Install build prerequisites
 
+Install Node.js/npm. Homebrew is convenient but not required.
 
-## 0.8.1 lockfile bootstrap
+```bash
+brew install node
+xcode-select --install
+```
 
-The 0.8.1 source archive intentionally requires one clean `npm install` on the target Mac to generate its new lockfile after the Electron/rebuild security refresh. Once generated and audited, `package-lock.json` becomes part of the canonical source tree and should be committed.
+If the Xcode Command Line Tools are already installed, macOS will say so.
+
+## 2. Obtain the source
+
+Clone the Git repository or copy the release source folder to a permanent location such as:
+
+```text
+~/Documents/tools/norcini-workbench
+```
+
+## 3. Install dependencies
+
+```bash
+cd ~/Documents/tools/norcini-workbench
+npm install
+```
+
+The `postinstall` step runs `@electron/rebuild` for `node-pty`. This native rebuild is required for the real Bash PTY.
+
+Keep the resulting `package-lock.json`.
+
+## 4. Test the development build
+
+```bash
+npm start
+```
+
+Verify at minimum:
+
+- the window opens as Norcini Workbench
+- the NW icon appears in the Dock
+- terminal input works
+- Tab completion and shell history work
+- Ctrl-C works
+- Terminal Here changes the shell directory
+- Org/Markdown files render
+- a PDF opens
+
+## 5. Build the normal macOS app
+
+```bash
+npm run pack:mac
+```
+
+Electron Builder writes `Norcini Workbench.app` under `dist/` in an architecture-specific folder.
+
+Move it to `/Applications`.
+
+## 6. Build distributable artifacts
+
+```bash
+npm run dist:mac
+```
+
+This produces a DMG and ZIP in `dist/`.
+
+## 7. First launch
+
+The current app is not code-signed or notarized. macOS may block the first ordinary double-click. If so, right-click the app and choose **Open** once.
+
+## Rebuild philosophy
+
+The filesystem remains canonical. Rebuilding Workbench should never require importing a Workbench database or migrating user content. The application simply reconnects to the same local roots.
