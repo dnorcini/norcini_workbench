@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")"
 
-printf '\nNorcini Workbench 0.8.1\n'
+printf '\nNorcini Workbench 0.8.3\n'
 printf '=======================\n\n'
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then

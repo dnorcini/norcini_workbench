@@ -1,6 +1,6 @@
 {
   "name": "norcini-workbench",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "description": "Local-first academic research workbench for filesystem, Org, PDFs, code, notebooks, LaTeX, and a real Bash terminal.",
   "main": "src/main.js",
   "author": "Norcini Workbench",

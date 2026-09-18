@@ -8,11 +8,9 @@
 
 <p align="center">Filesystem + Org + PDFs + LaTeX + notebooks + code + a real Bash terminal.</p>
 
----
-
 ## Home screen
 
-Workbench opens to a real **Home** dashboard inside the application. It is not a static marketing image. The **Home** button returns to the same dashboard at any time.
+Workbench now opens to a real **Home** dashboard inside the application. It is not a static marketing image. The Home button returns to the same dashboard at any time.
 
 The dashboard provides direct entry points to:
 
@@ -24,10 +22,6 @@ The dashboard provides direct entry points to:
 
 The file tree and dashboard are simply views over the existing filesystem and Org structure. No duplicate Workbench database is created.
 
-A built-in **Syntax Guide** is planned for the Home screen so common Org, Markdown, LaTeX, linking, checkbox, TODO, table, and source-block syntax is available directly inside Workbench.
-
----
-
 ## What it is
 
 Norcini Workbench is a lightweight macOS desktop front end over the tools that already hold the real work.
@@ -36,69 +30,64 @@ Norcini Workbench is a lightweight macOS desktop front end over the tools that a
 - **Org stays canonical** for notes, tasks, projects, meetings, logs, and navigation.
 - **Zotero stays canonical** for papers and bibliographic metadata.
 - **DokuWiki stays useful** for group-facing durable knowledge.
-- **Paper agenda remains useful** for daily execution.
 - **Workbench does not create a new database.**
 
 The aim is simple: make the existing academic workflow easier to navigate without replacing the underlying tools.
 
-Workbench is a front end over the existing system, not a replacement for it.
-
----
-
-## Core design principles
-
-Norcini Workbench is intentionally:
-
-- local-first
-- reversible
-- understandable
-- filesystem-native
-- compatible with existing tools
-- rebuildable from source
-- usable without AI
-- conservative about modifying existing files
-
-The underlying files remain ordinary files on disk.
-
-Workbench should never require migrating research, teaching, or notes into a proprietary application database.
-
----
-
 ## Current desktop experience
 
 - GitHub-inspired light interface
-- dark terminal only
 - file navigator over real local folders
-- Home dashboard
 - rendered Org and Markdown as the primary reading view
 - optional Quick Edit with conflict protection
-- clickable Org TODO/DONE states
-- clickable Org checkboxes
+- clickable Org TODO/DONE states and checkboxes
 - internal Org/file links open inside Workbench
 - PDF preview
-- Python execution
-- R execution
-- shell execution
-- LaTeX build workflow
-- notebook support under active development
+- Python, R, shell, LaTeX, and notebook actions
 - real `/bin/bash -l` PTY terminal using `node-pty` and xterm
-- Tab completion
-- shell history
-- Ctrl-C
-- interactive CLI programs
-- **Terminal Here** for the selected file or folder
+- Tab completion, shell history, Ctrl-C, interactive CLI programs
+- **Terminal here** for the selected file or folder
 - live filesystem refresh
 - resizable panes
-- back/forward navigation
-- Open in macOS
-- native macOS application name
-- NW Dock icon
+- native macOS application name and NW Dock icon
 
-The application is intended to feel more like a lightweight academic desktop environment than a conventional note-taking app.
+## Install the macOS app
 
----
+The simplest route is the included **`INSTALL.command`**.
 
-## Current local roots
+1. Unzip this folder somewhere permanent, for example `~/Documents/tools/norcini-workbench`.
+2. Double-click `INSTALL.command`.
+3. The script installs dependencies, rebuilds `node-pty`, runs `npm audit`, and builds `Norcini Workbench.app`.
+4. When prompted, allow it to copy the app to `/Applications`.
+
+Because the app is not code-signed or notarized yet, macOS may require **right-click → Open** the first time.
+
+### Terminal equivalent
+
+```bash
+npm install
+npm audit
+npm run pack:mac
+```
+
+Then copy the generated `Norcini Workbench.app` from `dist/` into `/Applications`.
+
+For a shareable DMG and ZIP build:
+
+```bash
+npm run dist:mac
+```
+
+## Development launch
+
+```bash
+npm install
+npm start
+```
+
+The development build also sets the NW Dock icon so it does not present as generic Electron while testing on macOS.
+
+## Local roots
 
 Workbench currently exposes these real locations:
 
@@ -107,3 +96,47 @@ Workbench currently exposes these real locations:
 ~/Documents/hopkins
 ~/Documents
 ~/Desktop/inbox
+```
+
+No project files are copied into Workbench. The sidebar is a navigator over the filesystem.
+
+## Terminal architecture
+
+The embedded terminal is not a fake command box. It is a real Bash pseudo-terminal:
+
+```text
+Electron main process
+       │
+       ├── node-pty
+       │      └── /bin/bash -l
+       │
+       └── IPC bridge
+              └── xterm renderer
+```
+
+This is why ordinary shell behavior works, including Tab completion, history, `ssh`, REPLs, `emacs -nw`, Ctrl-C, and other interactive programs.
+
+## Source-of-truth philosophy
+
+Workbench is intentionally a **navigator + viewer + launcher + lightweight editor**.
+
+It is not intended to become the place where research data, notes, references, or project metadata have to be migrated. The design is local-first, reversible, and understandable.
+
+## Documentation
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — application structure and major architectural choices
+- [`DEPENDENCIES.md`](DEPENDENCIES.md) — runtime and build dependencies
+- [`REBUILD.md`](REBUILD.md) — reconstruct the application on a clean Mac
+- [`DEVELOPMENT.md`](DEVELOPMENT.md) — development workflow
+- [`CHANGELOG.md`](CHANGELOG.md) — version history
+- [`AI_INTEGRATION.md`](AI_INTEGRATION.md) — future optional AI boundary
+
+## Version
+
+Current packaged source baseline: **0.8.1**.
+
+This release preserves the stable Electron 0.7.4 PTY architecture while adding the 0.8 light desktop interface, current Electron security refresh, macOS branding, build packaging, and rebuild documentation.
+
+## Future AI
+
+AI is deliberately **not** fundamental to the Workbench architecture. A future optional layer may receive explicit context such as the open file, selected text, project folder, Org tasks, terminal output, Zotero references, or a local search result. The filesystem, Org, and Zotero remain the sources of truth.

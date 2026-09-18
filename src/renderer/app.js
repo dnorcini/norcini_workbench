@@ -287,6 +287,65 @@ function homeDashboard(){
       </div>
     </section>
 
+    <section class="home-card syntax-guide-card">
+      <div class="home-card-label">Reference</div>
+
+      <details class="syntax-details">
+        <summary>
+          <span>
+            <strong>Org Syntax Guide</strong>
+            <small>Headings, tasks, links, formatting, dates, LaTeX, and code blocks.</small>
+          </span>
+          <span class="syntax-expand">Open guide →</span>
+        </summary>
+
+        <div class="syntax-guide">
+
+          <div class="syntax-section">
+            <h3>Structure</h3>
+            <div class="syntax-row"><code>* Heading</code><span>Heading</span></div>
+            <div class="syntax-row"><code>** Subheading</code><span>Subheading</span></div>
+            <div class="syntax-row"><code>- item</code><span>Bullet</span></div>
+            <div class="syntax-row"><code>- [ ] item</code><span>Checkbox</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Tasks</h3>
+            <div class="syntax-row"><code>* TODO Task</code><span>Open task</span></div>
+            <div class="syntax-row"><code>* DONE Task</code><span>Completed task</span></div>
+            <div class="syntax-row"><code>SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Scheduled</span></div>
+            <div class="syntax-row"><code>DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Deadline</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Formatting</h3>
+            <div class="syntax-row"><code>*bold*</code><span>Bold</span></div>
+            <div class="syntax-row"><code>/italic/</code><span>Italic</span></div>
+            <div class="syntax-row"><code>~code~</code><span>Inline code</span></div>
+            <div class="syntax-row"><code>\\( E = mc^2 \\)</code><span>Inline LaTeX</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Links</h3>
+            <div class="syntax-row"><code>[[file:notes.org][Notes]]</code><span>File link</span></div>
+            <div class="syntax-row"><code>[[My heading]]</code><span>Internal link</span></div>
+            <div class="syntax-row"><code>[[https://example.com][Site]]</code><span>Web link</span></div>
+          </div>
+
+        </div>
+
+        <div class="syntax-extra">
+          <div class="syntax-row"><code>&lt;2026-09-21 Mon&gt;</code><span>Active date</span></div>
+          <div class="syntax-row"><code>1. item</code><span>Numbered list</span></div>
+          <div class="syntax-row"><code>\\[ E = mc^2 \\]</code><span>Display LaTeX</span></div>
+
+          <pre class="syntax-code"><code>#+begin_src python
+print("hello")
+#+end_src</code></pre>
+        </div>
+      </details>
+    </section>
+
     <section class="home-shortcuts">
       <div>
         <strong>Filesystem</strong>
@@ -301,7 +360,10 @@ function homeDashboard(){
         <span>Real Bash PTY for Python, LaTeX, notebooks, Git, and shell tools.</span>
       </div>
     </section>
-  </main>`;
+  
+
+
+</main>`;
 }
 
 async function showHome(record=true){
@@ -331,6 +393,33 @@ function previewShell(body){
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}.nb-output{margin:8px 0 18px;padding-left:16px;border-left:3px solid #d8dee4}.nb-output img{max-width:100%}.nb-error{border-left-color:#cf222e}
   .pdf{position:fixed;inset:0;border:0;width:100%;height:100%}.image{max-width:100%;height:auto;display:block;margin:20px auto}
   .home-dashboard{max-width:1080px;margin:0 auto;padding:34px 38px 80px}.home-hero{display:flex;justify-content:space-between;gap:40px;align-items:flex-start;padding:4px 0 28px;border-bottom:1px solid #d8dee4}.home-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;color:#57606a;margin-bottom:8px}.home-hero h1{font-size:34px;border:0;margin:0 0 8px;padding:0}.home-hero p{font-size:16px;line-height:1.55;color:#57606a;max-width:720px;margin:0}.home-badge{font-size:13px;line-height:1.5;color:#57606a;text-align:right;white-space:nowrap;padding-top:4px}.home-badge strong{color:#1f2328}.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.home-card{border:1px solid #d8dee4;border-radius:10px;padding:18px;background:#fff;box-shadow:0 1px 0 rgba(31,35,40,.03)}.home-card-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#656d76}.home-card h2{font-size:18px;border:0;padding:0;margin:5px 0 12px}.wb-link{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #f0f1f2;font-size:14px}.wb-link:first-of-type{border-top:0}.home-card-note{font-size:13px;color:#656d76;margin-top:8px}.home-chip-row{display:flex;flex-wrap:wrap;gap:7px}.home-chip{display:inline-block;border:1px solid #d0d7de;background:#f6f8fa;border-radius:999px;padding:5px 9px;font-size:12px}.home-shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.home-shortcuts>div{padding:14px 16px;background:#f6f8fa;border-radius:8px}.home-shortcuts strong{display:block;font-size:13px;margin-bottom:4px}.home-shortcuts span{font-size:12px;color:#656d76;line-height:1.45}@media(max-width:800px){.home-grid,.home-shortcuts{grid-template-columns:1fr}.home-hero{display:block}.home-badge{text-align:left;margin-top:14px}}
+
+  .syntax-guide-card{grid-column:auto}
+  .syntax-guide{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin-top:4px}
+  .syntax-section h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#656d76}
+  .syntax-row{display:grid;grid-template-columns:minmax(165px,auto) 1fr;gap:12px;align-items:center;padding:6px 0;border-top:1px solid #f0f1f2;font-size:13px}
+  .syntax-row code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f8fa;border:1px solid #d8dee4;border-radius:5px;padding:3px 6px;white-space:nowrap}
+  .syntax-row span{color:#656d76}
+  .syntax-more{margin-top:16px;border-top:1px solid #d8dee4;padding-top:12px}
+  .syntax-more summary{cursor:pointer;color:#0969da;font-size:13px;font-weight:600}
+  .syntax-extra{margin-top:10px;max-width:620px}
+  .syntax-code{margin:12px 0 0;padding:12px}
+  @media(max-width:800px){.syntax-guide{grid-template-columns:1fr}.syntax-row{grid-template-columns:1fr;gap:3px}.syntax-row code{width:max-content;max-width:100%;white-space:normal}}
+
+
+  .syntax-guide-card{grid-column:auto}
+  .syntax-guide-card:has(.syntax-details[open]){grid-column:1/-1}
+  .syntax-details summary{display:flex;align-items:center;justify-content:space-between;gap:20px;cursor:pointer;list-style:none;margin-top:5px}
+  .syntax-details summary::-webkit-details-marker{display:none}
+  .syntax-details summary strong{display:block;font-size:18px;color:#1f2328}
+  .syntax-details summary small{display:block;margin-top:6px;font-size:13px;line-height:1.45;color:#656d76;font-weight:400}
+  .syntax-expand{font-size:13px;color:#0969da;white-space:nowrap}
+  .syntax-details[open] .syntax-expand{font-size:0}
+  .syntax-details[open] .syntax-expand:after{content:"Close guide ↑";font-size:13px}
+  .syntax-details[open] summary{padding-bottom:16px;border-bottom:1px solid #d8dee4;margin-bottom:18px}
+  .syntax-guide{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px}
+  .syntax-extra{margin-top:20px;border-top:1px solid #d8dee4;padding-top:14px}
+
   </style></head><body>${body}<script>
   document.addEventListener('click',e=>{
     const t=e.target.closest('.task-toggle');if(t){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(t.dataset.line),kind:t.dataset.kind},'*');return}
