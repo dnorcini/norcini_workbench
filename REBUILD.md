@@ -11,3 +11,8 @@
 9. Move the tested app to `/Applications` or `~/Applications`.
 
 Before changing Electron versions, make a known-good source snapshot. Native PTY compatibility is the highest-risk dependency boundary.
+
+
+## 0.8.1 lockfile bootstrap
+
+The 0.8.1 source archive intentionally requires one clean `npm install` on the target Mac to generate its new lockfile after the Electron/rebuild security refresh. Once generated and audited, `package-lock.json` becomes part of the canonical source tree and should be committed.

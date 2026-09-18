@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 - Security dependency refresh
+
+- Upgraded Electron from the 37.x line to pinned `44.4.3`.
+- Upgraded `@electron/rebuild` from 3.7.2 to pinned `4.2.0`.
+- Kept `node-pty` at stable 1.1.0 and retained the existing PTY/application architecture.
+- Removed the 0.8.0 lockfile rather than shipping a stale lockfile that no longer matched `package.json`.
+- The first `npm install` on the target Mac regenerates `package-lock.json`; that generated lockfile should be committed to GitHub after the install/audit succeeds.
+- No filesystem reorganization or user-data migration is performed.
+
 ## 0.8.0
 
 - Built directly from Electron 0.7.4.

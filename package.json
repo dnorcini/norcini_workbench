@@ -1,6 +1,6 @@
 {
   "name": "norcini-workbench",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Local-first academic research workbench for filesystem, Org, PDFs, code, notebooks, LaTeX, and a real Bash terminal.",
   "main": "src/main.js",
   "author": "Norcini Workbench",
@@ -18,9 +18,9 @@
     "xterm-addon-fit": "0.8.0"
   },
   "devDependencies": {
-    "electron": "^37.2.0",
+    "electron": "44.4.3",
     "electron-builder": "^26.0.12",
-    "@electron/rebuild": "^3.7.2"
+    "@electron/rebuild": "4.2.0"
   },
   "build": {
     "appId": "org.norcini.workbench",
