@@ -9,6 +9,7 @@ let fsTimer = null;
 let navHistory = [];
 let navIndex = -1;
 let navigatingHistory = false;
+let isHome = true;
 
 const workspace = document.getElementById('workspace');
 const tree = document.getElementById('fileTree');
@@ -75,11 +76,13 @@ function updateContextActions(){
   runBtn.hidden=!['.py','.r','.sh','.bash','.zsh'].includes(ext);
   buildBtn.hidden=ext!=='.tex';
   runNotebookBtn.hidden=ext!=='.ipynb';
+  openDefaultBtn.disabled=!currentPath;
+  document.getElementById('toggleEditorBtn').disabled=!currentPath;
 }
 function updateNavigation(){
   backBtn.disabled=navIndex<=0;
   forwardBtn.disabled=navIndex<0||navIndex>=navHistory.length-1;
-  activePath.textContent=currentPath||currentDir||'Norcini Workbench';
+  activePath.textContent=isHome?'Home':(currentPath||currentDir||'Norcini Workbench');
   activePath.title=activePath.textContent;
 }
 function recordLocation(type,path){
@@ -95,10 +98,11 @@ async function goHistory(delta){
   const next=navIndex+delta;if(next<0||next>=navHistory.length)return;
   if(!(await maybeAbandon()))return;
   navigatingHistory=true;navIndex=next;
-  try{const item=navHistory[navIndex];if(item.type==='dir')await loadDir(item.path,false);else await openFile(item.path,false)}
+  try{const item=navHistory[navIndex];if(item.type==='home')await showHome(false);else if(item.type==='dir')await loadDir(item.path,false);else await openFile(item.path,false)}
   finally{navigatingHistory=false;updateNavigation()}
 }
 async function loadDir(vpath,record=true){
+  isHome=false;
   const data=await window.workbench.listDir(vpath);
   currentDir=data.path.endsWith('/')?data.path:data.path+'/';
   if(record) recordLocation('dir',currentDir); else updateNavigation();
@@ -128,6 +132,7 @@ async function maybeAbandon(){
   return confirm('You have unsaved changes. Discard them?');
 }
 async function openFile(vpath,record=true){
+  isHome=false;
   if(currentPath!==vpath && !(await maybeAbandon()))return;
   const data=await window.workbench.readFile(vpath);
   currentPath=vpath;currentHash=data.sha256;markDirty(false);
@@ -232,6 +237,90 @@ function renderNotebook(text){
   }
   out.push('</article>');return out.join('');
 }
+
+function homeDashboard(){
+  const today=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date());
+  return `<main class="home-dashboard">
+    <section class="home-hero">
+      <div>
+        <div class="home-kicker">LOCAL-FIRST ACADEMIC WORKSPACE</div>
+        <h1>Norcini Workbench</h1>
+        <p>One place to navigate research, teaching, notes, documents, code, and a real Bash terminal without moving the underlying files.</p>
+      </div>
+      <div class="home-badge">All local.<br><strong>Always yours.</strong></div>
+    </section>
+
+    <section class="home-grid">
+      <div class="home-card">
+        <div class="home-card-label">Today</div>
+        <h2>${esc(today)}</h2>
+        <a href="#" class="wb-link" data-kind="file" data-path="org:/home.org">Open home.org <span>→</span></a>
+        <a href="#" class="wb-link" data-kind="file" data-path="org:/inbox.org">Process Org inbox <span>→</span></a>
+        <a href="#" class="wb-link" data-kind="file" data-path="org:/master.org">Open master.org <span>→</span></a>
+      </div>
+
+      <div class="home-card">
+        <div class="home-card-label">Research projects</div>
+        <h2>Projects</h2>
+        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/damicm/">DAMIC-M <span>→</span></a>
+        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/ccd_discovery/">CCD Discovery <span>→</span></a>
+        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/idg/">IDG <span>→</span></a>
+        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/rxtr_skippers/">RXTR Skippers <span>→</span></a>
+      </div>
+
+      <div class="home-card">
+        <div class="home-card-label">Teaching</div>
+        <h2>Current course</h2>
+        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/teaching/2026/as_171_301/">AS.171.301 <span>→</span></a>
+        <p class="home-card-note">Browse lecture notes, LaTeX, PDFs, figures, code, and course materials directly from the filesystem.</p>
+      </div>
+
+      <div class="home-card">
+        <div class="home-card-label">Org library</div>
+        <h2>Notes & context</h2>
+        <div class="home-chip-row">
+          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/meetings/">Meetings</a>
+          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/lab_notebook/">Lab notebook</a>
+          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/reference/">Reference</a>
+          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/teaching/">Teaching</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-shortcuts">
+      <div>
+        <strong>Filesystem</strong>
+        <span>Canonical projects, documents, data, code, and teaching files.</span>
+      </div>
+      <div>
+        <strong>Org</strong>
+        <span>Canonical notes, tasks, meetings, logs, and navigation.</span>
+      </div>
+      <div>
+        <strong>Terminal</strong>
+        <span>Real Bash PTY for Python, LaTeX, notebooks, Git, and shell tools.</span>
+      </div>
+    </section>
+  </main>`;
+}
+
+async function showHome(record=true){
+  if(!(await maybeAbandon())) return;
+  isHome=true;
+  currentPath=null;
+  currentHash=null;
+  markDirty(false);
+  editor.readOnly=true;
+  editor.value='';
+  editorTitle.textContent='Quick edit';
+  setEditorVisible(false);
+  document.querySelectorAll('.file-row').forEach(r=>r.classList.remove('selected'));
+  updateContextActions();
+  if(record) recordLocation('home','home'); else updateNavigation();
+  preview.removeAttribute('src');
+  preview.srcdoc=previewShell(homeDashboard());
+}
+
 function previewShell(body){
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   body{margin:0;background:#fff;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
@@ -241,16 +330,18 @@ function previewShell(body){
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}.nb-output{margin:8px 0 18px;padding-left:16px;border-left:3px solid #d8dee4}.nb-output img{max-width:100%}.nb-error{border-left-color:#cf222e}
   .pdf{position:fixed;inset:0;border:0;width:100%;height:100%}.image{max-width:100%;height:auto;display:block;margin:20px auto}
+  .home-dashboard{max-width:1080px;margin:0 auto;padding:34px 38px 80px}.home-hero{display:flex;justify-content:space-between;gap:40px;align-items:flex-start;padding:4px 0 28px;border-bottom:1px solid #d8dee4}.home-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;color:#57606a;margin-bottom:8px}.home-hero h1{font-size:34px;border:0;margin:0 0 8px;padding:0}.home-hero p{font-size:16px;line-height:1.55;color:#57606a;max-width:720px;margin:0}.home-badge{font-size:13px;line-height:1.5;color:#57606a;text-align:right;white-space:nowrap;padding-top:4px}.home-badge strong{color:#1f2328}.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.home-card{border:1px solid #d8dee4;border-radius:10px;padding:18px;background:#fff;box-shadow:0 1px 0 rgba(31,35,40,.03)}.home-card-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#656d76}.home-card h2{font-size:18px;border:0;padding:0;margin:5px 0 12px}.wb-link{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #f0f1f2;font-size:14px}.wb-link:first-of-type{border-top:0}.home-card-note{font-size:13px;color:#656d76;margin-top:8px}.home-chip-row{display:flex;flex-wrap:wrap;gap:7px}.home-chip{display:inline-block;border:1px solid #d0d7de;background:#f6f8fa;border-radius:999px;padding:5px 9px;font-size:12px}.home-shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.home-shortcuts>div{padding:14px 16px;background:#f6f8fa;border-radius:8px}.home-shortcuts strong{display:block;font-size:13px;margin-bottom:4px}.home-shortcuts span{font-size:12px;color:#656d76;line-height:1.45}@media(max-width:800px){.home-grid,.home-shortcuts{grid-template-columns:1fr}.home-hero{display:block}.home-badge{text-align:left;margin-top:14px}}
   </style></head><body>${body}<script>
   document.addEventListener('click',e=>{
     const t=e.target.closest('.task-toggle');if(t){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(t.dataset.line),kind:t.dataset.kind},'*');return}
     const w=e.target.closest('a[data-web]');if(w){e.preventDefault();parent.postMessage({type:'openWeb',url:w.dataset.web},'*');return}
     const f=e.target.closest('.org-file-link');if(f){e.preventDefault();parent.postMessage({type:'openOrgLink',target:f.dataset.target},'*');return}
+    const p=e.target.closest('.wb-link');if(p){e.preventDefault();parent.postMessage({type:'openWorkbenchPath',path:p.dataset.path,kind:p.dataset.kind},'*');return}
   });
   <\/script></body></html>`;
 }
 async function refreshPreview(){
-  if(!currentPath){preview.srcdoc=previewShell('<article class="doc"><h1>Norcini Workbench</h1><p>Select a file.</p></article>');return}
+  if(!currentPath){if(isHome){preview.srcdoc=previewShell(homeDashboard())}else{preview.srcdoc=previewShell('<article class="doc"><h1>Norcini Workbench</h1><p>Select a file.</p></article>')}return}
   const ext=extOf(currentPath);
   const info=await window.workbench.fileInfo(currentPath);
   if(ext==='.pdf'){
@@ -283,6 +374,8 @@ window.addEventListener('message',async e=>{
     editor.value=res.content;currentHash=res.sha256;markDirty(false);await refreshPreview();
   }else if(e.data.type==='openWeb'){
     window.workbench.openExternal(e.data.url);
+  }else if(e.data.type==='openWorkbenchPath'){
+    try{if(e.data.kind==='dir')await loadDir(e.data.path);else await openFile(e.data.path)}catch(err){showToast(err.message,true)}
   }else if(e.data.type==='openOrgLink'){
     try{
       const resolved=await window.workbench.resolveOrgLink({currentPath,target:e.data.target});
@@ -417,7 +510,7 @@ backBtn.onclick=()=>goHistory(-1);
 forwardBtn.onclick=()=>goHistory(1);
 openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
 document.getElementById('toggleEditorBtn').onclick=()=>setEditorVisible(!editorVisible);
-document.getElementById('homeBtn').onclick=async()=>{await loadDir('org:/');try{await openFile('org:/home.org')}catch{}};
+document.getElementById('homeBtn').onclick=()=>showHome();
 document.querySelectorAll('.root-tab').forEach(btn=>btn.onclick=async()=>{
   document.querySelectorAll('.root-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');await loadDir(btn.dataset.root)
 });
@@ -465,8 +558,8 @@ function setupResizers(){
 
 (async()=>{
   setupResizers();setEditorVisible(false);
-  await loadDir('org:/');
-  try{await openFile('org:/home.org')}catch{await refreshPreview()}
+  await loadDir('org:/',false);
+  await showHome();
   updateNavigation();
   await createTerminal();
 })();

@@ -8,7 +8,19 @@
 
 <p align="center">Filesystem + Org + PDFs + LaTeX + notebooks + code + a real Bash terminal.</p>
 
-![Norcini Workbench overview](assets/readme/norcini-workbench-showcase.png)
+## Home screen
+
+Workbench now opens to a real **Home** dashboard inside the application. It is not a static marketing image. The Home button returns to the same dashboard at any time.
+
+The dashboard provides direct entry points to:
+
+- `home.org`, `inbox.org`, and `master.org`
+- DAMIC-M, CCD Discovery, IDG, and RXTR Skippers
+- the current AS.171.301 teaching directory
+- Meetings, Lab Notebook, Reference, and Teaching sections of the Org library
+- the real Bash terminal, which remains visible along the bottom
+
+The file tree and dashboard are simply views over the existing filesystem and Org structure. No duplicate Workbench database is created.
 
 ## What it is
 

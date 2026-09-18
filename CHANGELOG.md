@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.8.1 - release baseline
+## 0.8.1
+- Returning Home now closes the Quick Edit pane so the Home dashboard always uses the full viewer area.
+
+### Release completion
+- Added a real in-app Home dashboard as the default launch view.
+- Home provides clickable links into core Org files, research projects, current teaching, and Org library sections.
+- Home button now returns to the dashboard rather than opening `home.org` directly.
+- Quick Edit and Open in macOS are disabled on the dashboard until a real file is selected.
 
 ### Security and dependencies
 - Electron pinned to 44.4.3.
