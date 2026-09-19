@@ -28,89 +28,25 @@ const createItemType = document.getElementById('createItemType');
 const createItemName = document.getElementById('createItemName');
 const contextMenu = document.getElementById('contextMenu');
 
-// Final Help menu behavior
 const helpMenu=document.getElementById('helpMenu');
 
 if(helpMenu){
-  const summary=helpMenu.querySelector('summary');
   const popover=helpMenu.querySelector('.help-popover');
-  const newNote=document.getElementById('newNoteBtn');
-  // Keep Help as the final control in the top toolbar.
-  const toolbar=helpMenu.parentElement;
-
-  if(toolbar){
-    toolbar.appendChild(helpMenu);
-  }
-
-  // Copy the ACTUAL toolbar-button appearance.
-  // Use !important inline properties so old experimental
-  // Help CSS cannot override them.
-  if(summary && newNote){
-    const matchToolbarButton=()=>{
-      const s=getComputedStyle(newNote);
-
-      [
-        'font-family',
-        'font-size',
-        'font-weight',
-        'font-style',
-        'line-height',
-        'letter-spacing',
-        'color',
-        'background-color',
-        'border-top-width',
-        'border-right-width',
-        'border-bottom-width',
-        'border-left-width',
-        'border-top-style',
-        'border-right-style',
-        'border-bottom-style',
-        'border-left-style',
-        'border-top-color',
-        'border-right-color',
-        'border-bottom-color',
-        'border-left-color',
-        'border-radius',
-        'padding-top',
-        'padding-right',
-        'padding-bottom',
-        'padding-left',
-        'height',
-        'min-height',
-        'box-shadow'
-      ].forEach(prop=>{
-        summary.style.setProperty(
-          prop,
-          s.getPropertyValue(prop),
-          'important'
-        );
-      });
-
-      summary.style.setProperty('display','inline-flex','important');
-      summary.style.setProperty('align-items','center','important');
-      summary.style.setProperty('justify-content','center','important');
-      summary.style.setProperty('box-sizing','border-box','important');
-      summary.style.setProperty('cursor','pointer','important');
-      summary.style.setProperty('list-style','none','important');
-      summary.style.setProperty('white-space','nowrap','important');
-      summary.style.setProperty('appearance','none','important');
-      summary.style.setProperty('-webkit-appearance','none','important');
-    };
-
-    matchToolbarButton();
-  }
-
   if(popover){
-    // Enough room that every example stays on one line.
-    popover.style.setProperty('width','700px','important');
-    popover.style.setProperty('max-width','calc(100vw - 40px)','important');
-
     popover.innerHTML=`
       <div class="help-section">
         <strong>Workbench commands</strong>
         <div><code>wb FILE</code><span>Open file in Workbench</span></div>
         <div><code>wb .</code><span>Open terminal directory</span></div>
-        <div><code>⌘S</code><span>Save now</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Keyboard Shortcuts</strong>
+        <div><code>⌘S / Ctrl-S</code><span>Save current file</span></div>
+        <div><code>Tab</code><span>Complete a command in the terminal</span></div>
+        <div><code>↑ / ↓</code><span>Browse terminal command history</span></div>
+        <div><code>Ctrl-C</code><span>Interrupt a terminal command</span></div>
+        <div><code>Esc</code><span>Close Help</span></div>
       </div>
 
       <div class="help-section">
@@ -138,17 +74,6 @@ if(helpMenu){
       </div>
     `;
 
-    popover.querySelectorAll('.help-section>div').forEach(row=>{
-      row.style.setProperty(
-        'grid-template-columns',
-        '260px 1fr',
-        'important'
-      );
-    });
-
-    popover.querySelectorAll('code').forEach(code=>{
-      code.style.setProperty('white-space','nowrap','important');
-    });
   }
 
   // Clicking anywhere outside closes Help.

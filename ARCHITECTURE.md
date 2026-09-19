@@ -14,7 +14,7 @@ Workbench exposes named roots and converts between virtual paths such as `org:/h
 
 ## PTY model
 
-`node-pty` spawns `/bin/bash -l`. xterm sends its native `onData` stream to the PTY over IPC, preserving Tab completion, history, control keys, colors, and interactive programs. Run/build actions generate shell commands and send those commands to the same real Bash terminal.
+`node-pty` spawns `/bin/bash` with `--rcfile workbench-bashrc -i`. Workbench writes that rc file in Electron's user data directory; it sources `~/.bash_profile` if present, otherwise `~/.bashrc`, and configures `wb` and directory reporting. xterm sends its native `onData` stream to the PTY over IPC, preserving Tab completion, history, control keys, colors, and interactive programs. Run/build actions send shell commands to the same terminal. Files navigation sends directory changes to Bash, while Bash prompt reporting updates Files after terminal directory changes.
 
 ## Rendering
 

@@ -18,13 +18,13 @@ If the Xcode Command Line Tools are already installed, macOS will say so.
 Clone the Git repository or copy the release source folder to a permanent location such as:
 
 ```text
-~/Documents/tools/norcini-workbench
+~/Documents/tools/norcini_workbench
 ```
 
 ## 3. Install dependencies
 
 ```bash
-cd ~/Documents/tools/norcini-workbench
+cd ~/Documents/tools/norcini_workbench
 npm install
 ```
 
@@ -45,7 +45,8 @@ Verify at minimum:
 - terminal input works
 - Tab completion and shell history work
 - Ctrl-C works
-- Terminal Here changes the shell directory
+- Files navigation changes the terminal directory, and terminal `cd` updates Files
+- `wb FILE` and `wb .` open paths in Workbench
 - Org/Markdown files render
 - a PDF opens
 
@@ -57,7 +58,7 @@ npm run pack:mac
 
 Electron Builder writes `Norcini Workbench.app` under `dist/` in an architecture-specific folder.
 
-Move it to `/Applications`.
+For normal installation to `/Applications`, follow [`RELEASE.md`](RELEASE.md) and run `npm run install:mac` from the repository root.
 
 ## 6. Build distributable artifacts
 

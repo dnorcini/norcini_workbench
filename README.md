@@ -60,39 +60,17 @@ The aim is simple: make the existing academic workflow easier to navigate withou
 - internal Org/file links open inside Workbench
 - PDF preview
 - Python, R, shell, LaTeX, and notebook actions
-- real `/bin/bash -l` PTY terminal using `node-pty` and xterm
+- real interactive Bash PTY terminal using `node-pty` and xterm
 - Tab completion, shell history, Ctrl-C, interactive CLI programs
-- **Terminal here** for the selected file or folder
+- Files and terminal directory stay synchronized in both directions
+- `wb FILE` and `wb .` open terminal paths in Workbench
 - live filesystem refresh
 - resizable panes
 - native macOS application name and NW Dock icon
 
 ## Install the macOS app
 
-The simplest route is the included **`INSTALL.command`**.
-
-1. Unzip this folder somewhere permanent, for example `~/Documents/tools/norcini-workbench`.
-2. Double-click `INSTALL.command`.
-3. The script installs dependencies, rebuilds `node-pty`, runs `npm audit`, and builds `Norcini Workbench.app`.
-4. When prompted, allow it to copy the app to `/Applications`.
-
-Because the app is not code-signed or notarized yet, macOS may require **right-click → Open** the first time.
-
-### Terminal equivalent
-
-```bash
-npm install
-npm audit
-npm run pack:mac
-```
-
-Then copy the generated `Norcini Workbench.app` from `dist/` into `/Applications`.
-
-For a shareable DMG and ZIP build:
-
-```bash
-npm run dist:mac
-```
+Run `npm run install:mac` from the repository root. It installs dependencies, builds the app, backs up the previous installed copy, installs to `/Applications/Norcini Workbench.app`, and launches it. See [`RELEASE.md`](RELEASE.md) for the canonical release and install workflow, including build-only and distributable artifact commands.
 
 ## Development launch
 
@@ -124,13 +102,13 @@ The embedded terminal is not a fake command box. It is a real Bash pseudo-termin
 Electron main process
        │
        ├── node-pty
-       │      └── /bin/bash -l
+       │      └── /bin/bash --rcfile workbench-bashrc -i
        │
        └── IPC bridge
               └── xterm renderer
 ```
 
-This is why ordinary shell behavior works, including Tab completion, history, `ssh`, REPLs, `emacs -nw`, Ctrl-C, and other interactive programs.
+The generated rc file sources `~/.bash_profile` if present, otherwise `~/.bashrc`, and sets up Workbench's `wb` command and directory reporting. This preserves ordinary interactive shell behavior, including Tab completion, history, `ssh`, REPLs, `emacs -nw`, and Ctrl-C.
 
 ## Source-of-truth philosophy
 
@@ -140,18 +118,17 @@ It is not intended to become the place where research data, notes, references, o
 
 ## Documentation
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — application structure and major architectural choices
-- [`DEPENDENCIES.md`](DEPENDENCIES.md) — runtime and build dependencies
-- [`REBUILD.md`](REBUILD.md) — reconstruct the application on a clean Mac
-- [`DEVELOPMENT.md`](DEVELOPMENT.md) — development workflow
-- [`CHANGELOG.md`](CHANGELOG.md) — version history
-- [`AI_INTEGRATION.md`](AI_INTEGRATION.md) — future optional AI boundary
+- [`RELEASE.md`](RELEASE.md): canonical release and install workflow
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): application structure and major architectural choices
+- [`DEPENDENCIES.md`](DEPENDENCIES.md): runtime and build dependencies
+- [`REBUILD.md`](REBUILD.md): reconstruct the application on a clean Mac
+- [`DEVELOPMENT.md`](DEVELOPMENT.md): development workflow
+- [`CHANGELOG.md`](CHANGELOG.md): version history
+- [`AI_INTEGRATION.md`](AI_INTEGRATION.md): future optional AI boundary
 
 ## Version
 
-Current packaged source baseline: **0.8.1**.
-
-This release preserves the stable Electron 0.7.4 PTY architecture while adding the 0.8 light desktop interface, current Electron security refresh, macOS branding, build packaging, and rebuild documentation.
+Current frozen functional baseline: **0.8.3** at tag `v0.8.3-final`. The earlier `v0.8.3` tag points to a prior 0.8.3 commit.
 
 ## Future AI
 

@@ -16,10 +16,10 @@ Application source lives under `src/`.
 
 ## Do not casually replace the PTY path
 
-Electron 0.7.4 established the stable terminal architecture:
+Electron 0.7.4 established the terminal path, which the current implementation extends with a generated Bash rc file:
 
 ```text
-xterm -> preload IPC -> Electron main -> node-pty -> /bin/bash -l
+xterm -> preload IPC -> Electron main -> node-pty -> /bin/bash --rcfile workbench-bashrc -i
 ```
 
 That path is foundational. UI work should not replace it with `exec`, a fake command box, or a browser terminal abstraction.
@@ -29,8 +29,8 @@ That path is foundational. UI work should not replace it with `exec`, a fake com
 Keep `main` usable. Mark known-good releases with annotated Git tags such as:
 
 ```bash
-git tag -a v0.8.1 -m "Norcini Workbench v0.8.1"
-git push origin v0.8.1
+git tag -a v<version> -m "Norcini Workbench v<version>"
+git push origin v<version>
 ```
 
 Use branches for substantial experiments. Tauri is not an active development target unless explicitly revived.
@@ -42,13 +42,14 @@ Before calling a version stable:
 1. `npm audit`
 2. `npm start`
 3. terminal typing / Tab / history / Ctrl-C
-4. Terminal Here
-5. Org rendering and Quick Edit
-6. PDF preview
-7. Python or shell execution
-8. LaTeX build if available
-9. `npm run pack:mac`
-10. launch the packaged `.app` from Finder or `/Applications`
+4. Files navigation changes the terminal directory, and terminal `cd` updates Files
+5. `wb FILE` and `wb .` open the requested paths
+6. Org rendering and Quick Edit
+7. PDF preview
+8. Python or shell execution
+9. LaTeX build if available
+10. `npm run pack:mac`
+11. launch the packaged `.app` from Finder or `/Applications`
 
 ## Canonical source directory
 

@@ -1,6 +1,6 @@
 # Future AI Integration
 
-AI is optional and must not become a source of truth. 0.8.1 contains no required AI layer.
+AI is optional and must not become a source of truth. The frozen 0.8.3 baseline contains no required AI layer.
 
 A future adapter may receive explicitly scoped context such as the current file, selected text, current project folder, Org tasks, terminal output, Zotero references, or search results from the local library.
 

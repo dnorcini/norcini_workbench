@@ -1,13 +1,29 @@
 # Changelog
 
-## 0.8.1
-- Returning Home now closes the Quick Edit pane so the Home dashboard always uses the full viewer area.
+## 0.8.3 final baseline
 
-### Release completion
-- Added a real in-app Home dashboard as the default launch view.
-- Home provides clickable links into core Org files, research projects, current teaching, and Org library sections.
-- Home button now returns to the dashboard rather than opening `home.org` directly.
-- Quick Edit and Open in macOS are disabled on the dashboard until a real file is selected.
+- Added file and folder creation, autosave, smart list continuation, and LaTeX live save/build/PDF refresh.
+- Added the 60-day Org agenda and preserved rendered scroll position when toggling Org checkboxes and TODO states.
+- Synchronized Files and the Bash terminal in both directions; `wb FILE` and `wb .` open terminal paths in Workbench.
+- Added C, C++, and ROOT execution. Uppercase `.C` macros run with `root -l -q`.
+- Added a generated-output gallery with source-aware matching where possible, plus the Help dropdown.
+- Kept the top filesystem shortcuts to `org`, `hopkins`, and `teaching`, and Help as the last top-toolbar button.
+- Added `RELEASE.md` and `npm run install:mac` for the normal packaged install at `/Applications/Norcini Workbench.app`.
+- `v0.8.3-final` marks the frozen baseline; `v0.8.3` marks an earlier 0.8.3 commit.
+
+## 0.8.3 earlier tag
+
+- Added the Home dashboard as the default launch view, with links to core Org files, projects, teaching, and Org library sections.
+- Home navigation closes Quick Edit and disables file-specific actions until a file is selected.
+- Updated the displayed application version to 0.8.3.
+
+## 0.8.2
+
+- Refined macOS packaging configuration and artifact naming for the app, DMG, and ZIP builds.
+- Set the development app name and Dock icon.
+- Updated installation and rebuild documentation.
+
+## 0.8.1
 
 ### Security and dependencies
 - Electron pinned to 44.4.3.
@@ -45,4 +61,4 @@
 ## 0.7.4
 - Known-good Electron PTY baseline.
 - Real Bash keyboard input restored through xterm `onData`.
-- Tab completion, history, Ctrl-C/Ctrl-D, interactive programs, and Terminal Here verified in the architecture.
+- Tab completion, history, Ctrl-C/Ctrl-D, and interactive programs verified in the architecture.
