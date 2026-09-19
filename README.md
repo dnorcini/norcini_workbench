@@ -38,6 +38,10 @@ The dashboard provides direct entry points to:
 
 The file tree and dashboard are simply views over the existing filesystem and Org structure. No duplicate Workbench database is created.
 
+Org, Markdown, and notebooks open in rendered view. Use **Edit source** to show the source beside the preview. Org and Markdown previews update while keeping their scroll position. Code files open with source visible. LaTeX opens its PDF when one exists; otherwise its source is visible with a build prompt. The same source toggle works for LaTeX and code.
+
+Click **Edit** at the lower right of the Home header to change its text and the cards inside Workbench. You can add, remove, and reorder cards; change their labels, titles, notes, links, and agenda display; and save the result. The settings live in a local `home-shortcuts.json` file. Existing project and course shortcuts are carried into the editor on first use. This file contains Home presentation and navigation preferences only.
+
 ## What it is
 
 Norcini Workbench is a lightweight macOS desktop front end over the tools that already hold the real work.

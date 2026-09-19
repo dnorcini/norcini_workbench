@@ -10,6 +10,9 @@ let navHistory = [];
 let navIndex = -1;
 let navigatingHistory = false;
 let isHome = true;
+let homeShortcuts = {hero:{},cards:[]};
+let homeShortcutsHash = null;
+let inlineRenderId = 0;
 let suppressFsReloadUntil = 0;
 const lastRunStartedAt = new Map();
 
@@ -20,6 +23,12 @@ const editor = document.getElementById('editor');
 const editorTitle = document.getElementById('editorTitle');
 const dirtyDot = document.getElementById('dirtyDot');
 const preview = document.getElementById('preview');
+const homeSettingsDialog = document.getElementById('homeSettingsDialog');
+const homeSettingsForm = document.getElementById('homeSettingsForm');
+const homeCardEditor = document.getElementById('homeCardEditor');
+const homeSettingsError = document.getElementById('homeSettingsError');
+let editingHomeCards = [];
+let editingHomeHero = {};
 const toastEl = document.getElementById('toast');
 const dialogNote = document.getElementById('newNoteDialog');
 const createItemDialog = document.getElementById('createItemDialog');
@@ -71,8 +80,25 @@ if(helpMenu){
         <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
         <div><code>DEADLINE:</code><span>Deadline</span></div>
         <div><code>[[file:path][Label]]</code><span>File link</span></div>
+        <div><a href="#" class="full-org-guide-link">Full Org Syntax Guide →</a><span>Open on Home</span></div>
       </div>
     `;
+
+    popover.querySelector('.full-org-guide-link').addEventListener('click',async e=>{
+      e.preventDefault();
+      helpMenu.removeAttribute('open');
+      await showHome();
+      if(!isHome) return;
+      const onHomeLoad=preview.onload;
+      preview.onload=event=>{
+        onHomeLoad?.(event);
+        const guide=preview.contentDocument?.querySelector('.syntax-details');
+        if(guide){
+          guide.open=true;
+          guide.scrollIntoView({block:'start'});
+        }
+      };
+    });
 
   }
 
@@ -138,7 +164,7 @@ function markDirty(value){
 function setEditorVisible(show){
   editorVisible=show;
   workspace.classList.toggle('editor-hidden',!show);
-  document.getElementById('toggleEditorBtn').textContent=show?'Hide quick edit':'Quick edit';
+  document.getElementById('toggleEditorBtn').textContent=show?'Hide source':(currentPath?'Show source':'Quick edit');
   setTimeout(()=>{fitAddon.fit(); resizeTerminal();},50);
 }
 function updateContextActions(){
@@ -184,12 +210,16 @@ async function syncTerminalToPath(vpath){
   }catch{}
 }
 
-async function loadDir(vpath,record=true){
-  isHome=false;
+async function loadDir(vpath,record=true,preserveView=false){
   const data=await window.workbench.listDir(vpath);
+  if(!preserveView)isHome=false;
   currentDir=data.path.endsWith('/')?data.path:data.path+'/';
   if(record) recordLocation('dir',currentDir); else updateNavigation();
   breadcrumbs.textContent=currentDir;
+  if(!currentPath&&!isHome){
+    preview.removeAttribute('src');
+    preview.srcdoc=previewShell(`<article class="doc"><h1>${esc(currentDir)}</h1><p>Select a file from Files.</p></article>`);
+  }
   tree.innerHTML='';
   if(!/^[^:]+:\/$/.test(currentDir)){
     const up=document.createElement('div');
@@ -225,9 +255,10 @@ async function maybeAbandon(){
   return confirm('You have unsaved changes. Discard them?');
 }
 async function openFile(vpath,record=true){
-  isHome=false;
-  if(currentPath!==vpath && !(await maybeAbandon()))return;
+  const switching=currentPath!==vpath;
+  if(switching && !(await maybeAbandon()))return;
   const data=await window.workbench.readFile(vpath);
+  isHome=false;
   currentPath=vpath;currentHash=data.sha256;markDirty(false);
   if(record) recordLocation('file',vpath); else updateNavigation();
   document.querySelectorAll('.file-row').forEach(r=>r.classList.toggle('selected',r.dataset.path===vpath));
@@ -236,6 +267,12 @@ async function openFile(vpath,record=true){
   editor.value=data.binary?'(Binary file: use rendered view)':''+data.content;
   currentDir=dirname(vpath);
   updateContextActions();
+  if(switching){
+    const ext=extOf(vpath);
+    const renderFirst=['.org','.md','.ipynb','.pdf','.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext);
+    const showSource=!data.binary&&!renderFirst;
+    setEditorVisible(showSource);
+  }
   await refreshPreview();
 }
 async function buildLatexLive(vpath,quiet=true){
@@ -339,7 +376,7 @@ editor.addEventListener('input',()=>{
 
 function debouncePreview(){
   clearTimeout(previewTimer);
-  previewTimer=setTimeout(refreshPreview,300);
+  previewTimer=setTimeout(()=>refreshPreview({preserveScroll:true}),300);
 }
 
 
@@ -421,6 +458,7 @@ function orgInline(s,current){
   x=x.replace(/~([^~\n]+)~/g,'<code>$1</code>');
   return x;
 }
+function inlineEditAttrs(line){return `data-inline-line="${line}" data-inline-render="${inlineRenderId}" contenteditable="true" spellcheck="true"`}
 function renderOrg(text){
   const lines=text.split(/\r?\n/);const out=['<article class="doc">'];let inSrc=false,src=[],lang='';
   lines.forEach((line,i)=>{
@@ -430,58 +468,86 @@ function renderOrg(text){
     }
     let m=line.match(/^\s*#\+begin_src\s*([A-Za-z0-9_+-]*)/i);
     if(m){inSrc=true;lang=m[1]||'';return}
-    m=line.match(/^#\+TITLE:\s*(.*)$/i);if(m){out.push(`<h1>${orgInline(m[1])}</h1>`);return}
+    m=line.match(/^#\+TITLE:\s*(.*)$/i);if(m){out.push(`<h1 ${inlineEditAttrs(i)}>${orgInline(m[1])}</h1>`);return}
     if(/^#\+/.test(line))return;
     m=line.match(/^(\*+)\s+(TODO|DONE)\s+(.*)$/);
     if(m){
       const done=m[2]==='DONE';
-      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}">${orgInline(m[3])}</span></div>`);
+      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3])}</span></div>`);
       return;
     }
-    m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l}>${orgInline(m[2])}</h${l}>`);return}
+    m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l} ${inlineEditAttrs(i)}>${orgInline(m[2])}</h${l}>`);return}
     m=line.match(/^\s*[-+]\s+\[([ Xx])\]\s+(.*)$/);if(m){
       const done=m[1].toLowerCase()==='x';
-      out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}">${orgInline(m[2])}</span></div>`);return;
+      out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[2])}</span></div>`);return;
     }
-    m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet">• ${orgInline(m[1])}</div>`);return}
-    if(/^\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(line)){out.push(`<div class="timestamp">${esc(line.trim())}</div>`);return}
-    if(!line.trim()){out.push('<div class="spacer"></div>');return}
-    out.push(`<p>${orgInline(line)}</p>`);
+    m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet">• <span ${inlineEditAttrs(i)}>${orgInline(m[1])}</span></div>`);return}
+    if(/^\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(line)){out.push(`<div class="timestamp" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
+    if(!line.trim()){out.push(`<div class="spacer inline-blank" ${inlineEditAttrs(i)}></div>`);return}
+    out.push(`<p ${inlineEditAttrs(i)}>${orgInline(line)}</p>`);
   });
   out.push('</article>');return out.join('\n');
 }
-function renderMarkdown(text){
+function renderMarkdown(text,editable=false){
   const out=['<article class="doc">'];let code=false,buf=[];
-  for(const line of text.split(/\r?\n/)){
-    if(line.startsWith('```')){if(code){out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);buf=[]}code=!code;continue}
-    if(code){buf.push(line);continue}
-    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length}>${esc(m[2])}</h${m[1].length}>`);continue}
-    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet">• ${esc(line.replace(/^\s*[-*+]\s+/,''))}</div>`);continue}
-    out.push(line.trim()?`<p>${esc(line)}</p>`:'<div class="spacer"></div>');
-  }
+  text.split(/\r?\n/).forEach((line,i)=>{
+    const attrs=editable?inlineEditAttrs(i):'';
+    if(line.startsWith('```')){if(code){out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);buf=[]}code=!code;return}
+    if(code){buf.push(line);return}
+    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${esc(m[2])}</h${m[1].length}>`);return}
+    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet">• <span ${attrs}>${esc(line.replace(/^\s*[-*+]\s+/,''))}</span></div>`);return}
+    out.push(line.trim()?`<p ${attrs}>${esc(line)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
+  });
   out.push('</article>');return out.join('\n');
 }
 function renderNotebook(text){
-  let nb;try{nb=JSON.parse(text)}catch{return '<article class="doc"><h1>Invalid notebook JSON</h1></article>'}
-  const out=['<article class="doc notebook">'];
-  for(const cell of nb.cells||[]){
-    const source=(cell.source||[]).join('');
-    if(cell.cell_type==='markdown'){out.push(renderMarkdown(source).replace(/^<article class="doc">|<\/article>$/g,''));continue}
-    if(cell.cell_type==='code'){
-      out.push(`<div class="nb-cell"><pre><code>${esc(source)}</code></pre>`);
-      for(const o of cell.outputs||[]){
-        if(o.output_type==='stream')out.push(`<div class="nb-output"><pre><code>${esc((o.text||[]).join(''))}</code></pre></div>`);
-        else if(['display_data','execute_result'].includes(o.output_type)){
-          const d=o.data||{};
-          if(d['image/png'])out.push(`<div class="nb-output"><img src="data:image/png;base64,${Array.isArray(d['image/png'])?d['image/png'].join(''):d['image/png']}"></div>`);
-          else if(d['text/html'])out.push(`<div class="nb-output">${Array.isArray(d['text/html'])?d['text/html'].join(''):d['text/html']}</div>`);
-          else if(d['text/plain'])out.push(`<div class="nb-output"><pre><code>${esc(Array.isArray(d['text/plain'])?d['text/plain'].join(''):d['text/plain'])}</code></pre></div>`);
-        } else if(o.output_type==='error')out.push(`<div class="nb-output nb-error"><pre><code>${esc((o.traceback||[]).join('\n').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,''))}</code></pre></div>`);
-      }
-      out.push('</div>');
-    }
+  let nb;
+  try{nb=JSON.parse(text)}catch{
+    return '<article class="doc notebook"><h1>Notebook could not be rendered</h1><p>The .ipynb file is not valid JSON. Open Quick edit to inspect it.</p></article>';
   }
-  out.push('</article>');return out.join('');
+  const cells=nb && Array.isArray(nb.cells)?nb.cells:[];
+  const asText=value=>Array.isArray(value)?value.join(''):String(value??'');
+  const out=[
+    '<article class="doc notebook">',
+    '<header class="nb-header"><h1>Notebook</h1><p>Run all cells executes this notebook in order. Successful runs save outputs to the .ipynb file; progress and errors appear in the Bash terminal.</p></header>'
+  ];
+  if(!cells.length)out.push('<div class="nb-empty">This notebook has no cells yet.</div>');
+  cells.forEach((cell,index)=>{
+    if(!cell || typeof cell!=='object')return;
+    const source=asText(cell.source);
+    if(cell.cell_type==='markdown'){
+      out.push(`<section class="nb-markdown" aria-label="Markdown cell ${index+1}">${renderMarkdown(source).replace(/^<article class="doc">|<\/article>$/g,'')}</section>`);
+      return;
+    }
+    if(cell.cell_type!=='code')return;
+
+    const count=cell.execution_count==null?' ':esc(cell.execution_count);
+    const outputs=Array.isArray(cell.outputs)?cell.outputs:[];
+    out.push(`<section class="nb-cell"><div class="nb-cell-label"><span>Code cell ${index+1}</span><span>In [${count}]</span></div><pre class="nb-source"><code>${esc(source)}</code></pre>`);
+    if(!outputs.length)out.push('<p class="nb-no-output">No saved output</p>');
+    for(const output of outputs){
+      if(!output || typeof output!=='object')continue;
+      if(output.output_type==='stream'){
+        const stderr=output.name==='stderr';
+        out.push(`<div class="nb-output ${stderr?'nb-stderr':''}"><div class="nb-output-label">${stderr?'stderr':'stdout'}</div><pre><code>${esc(asText(output.text))}</code></pre></div>`);
+      }else if(['display_data','execute_result'].includes(output.output_type)){
+        const data=output.data||{};
+        let content='';
+        if(data['image/png'])content=`<img src="data:image/png;base64,${asText(data['image/png'])}" alt="Notebook output image">`;
+        else if(data['text/html'])content=asText(data['text/html']);
+        else if(data['text/plain'])content=`<pre><code>${esc(asText(data['text/plain']))}</code></pre>`;
+        if(content)out.push(`<div class="nb-output"><div class="nb-output-label">Result</div>${content}</div>`);
+      }else if(output.output_type==='error'){
+        const traceback=Array.isArray(output.traceback)?output.traceback.join('\n'):asText(output.traceback);
+        const fallback=[output.ename,output.evalue].filter(Boolean).join(': ');
+        const message=(traceback||fallback).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'');
+        out.push(`<div class="nb-output nb-error"><div class="nb-output-label">Error</div><pre><code>${esc(message)}</code></pre></div>`);
+      }
+    }
+    out.push('</section>');
+  });
+  out.push('</article>');
+  return out.join('');
 }
 
 
@@ -600,18 +666,18 @@ async function loadHomeAgendaPreview(){
     const doc=preview.contentDocument;
     if(!doc)return;
 
-    const box=doc.getElementById('homeAgendaPreview');
-    if(!box)return;
+    const boxes=doc.querySelectorAll('.home-agenda-preview');
+    if(!boxes.length)return;
 
     if(!upcoming.length){
-      box.innerHTML=`
+      boxes.forEach(box=>box.innerHTML=`
         <div class="home-agenda-label">Upcoming</div>
         <div class="home-agenda-empty">Nothing scheduled soon.</div>
-      `;
+      `);
       return;
     }
 
-    box.innerHTML=`
+    const html=`
       <div class="home-agenda-label">Upcoming</div>
 
       ${upcoming.map(item=>`
@@ -625,16 +691,31 @@ async function loadHomeAgendaPreview(){
         </div>
       `).join('')}
     `;
+    boxes.forEach(box=>box.innerHTML=html);
   }catch(err){
     const doc=preview.contentDocument;
-    const box=doc && doc.getElementById('homeAgendaPreview');
-
-    if(box){
-      box.innerHTML=`
+    if(doc){
+      doc.querySelectorAll('.home-agenda-preview').forEach(box=>box.innerHTML=`
         <div class="home-agenda-label">Upcoming</div>
         <div class="home-agenda-empty">Agenda unavailable.</div>
-      `;
+      `);
     }
+  }
+}
+
+async function loadRecentNotesPreview(){
+  try{
+    const notes=await window.workbench.getRecentNotes();
+    if(!isHome)return;
+    const doc=preview.contentDocument;
+    if(!doc)return;
+    const html=`<div class="home-agenda-label">Recently edited notes</div>`+
+      (notes.length?notes.map(note=>`<a href="#" class="wb-link" data-kind="file" data-path="${esc(note.path)}">${esc(note.name)} <span>${esc(new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric'}).format(new Date(note.mtimeMs)))}</span></a>`).join('')
+        :'<div class="home-agenda-empty">No notes found in the Org library.</div>');
+    doc.querySelectorAll('.recent-notes-preview').forEach(box=>box.innerHTML=html);
+  }catch{
+    const doc=preview.contentDocument;
+    doc?.querySelectorAll('.recent-notes-preview').forEach(box=>box.innerHTML='<div class="home-agenda-label">Recently edited notes</div><div class="home-agenda-empty">Recent notes unavailable.</div>');
   }
 }
 
@@ -689,63 +770,129 @@ async function showAgenda(){
 }
 
 
+function renderHomeCardEditor(){
+  const scroll=homeCardEditor.scrollTop;
+  homeCardEditor.innerHTML=`<section class="home-editor-card">
+    <div class="home-editor-heading"><strong>Home header</strong></div>
+    <div class="home-editor-fields">
+      <label>Small heading<input data-home-field="kicker" value="${esc(editingHomeHero.kicker)}"></label>
+      <label>Main title<input data-home-field="title" value="${esc(editingHomeHero.title)}"></label>
+      <label class="wide">Description<input data-home-field="description" value="${esc(editingHomeHero.description)}"></label>
+      <label>Right text, first line<input data-home-field="badgeTop" value="${esc(editingHomeHero.badgeTop)}"></label>
+      <label>Right text, second line<input data-home-field="badgeBottom" value="${esc(editingHomeHero.badgeBottom)}"></label>
+    </div>
+  </section>`+editingHomeCards.map((card,index)=>`<section class="home-editor-card">
+    <div class="home-editor-heading"><strong>Card ${index+1}</strong>
+      <button type="button" data-action="up" data-card="${index}" ${index===0?'disabled':''} title="Move up">↑</button>
+      <button type="button" data-action="down" data-card="${index}" ${index===editingHomeCards.length-1?'disabled':''} title="Move down">↓</button>
+      <button type="button" data-action="remove-card" data-card="${index}" class="danger">Remove</button>
+    </div>
+    <div class="home-editor-fields">
+      <label>Section label<input data-card="${index}" data-field="label" value="${esc(card.label)}" required></label>
+      <label>Title<input data-card="${index}" data-field="title" value="${esc(card.title)}" required></label>
+      <label class="wide">Note (optional)<input data-card="${index}" data-field="note" value="${esc(card.note||'')}"></label>
+    </div>
+    <div class="home-editor-options">
+      <label><input type="checkbox" data-card="${index}" data-field="showAgenda" ${card.showAgenda?'checked':''}> Show agenda</label>
+      <label><input type="checkbox" data-card="${index}" data-field="showRecentNotes" ${card.showRecentNotes?'checked':''}> Show recent notes</label>
+      <label>Links as <select data-card="${index}" data-field="style"><option value="links" ${card.style!=='chips'?'selected':''}>Rows</option><option value="chips" ${card.style==='chips'?'selected':''}>Chips</option></select></label>
+    </div>
+    <div class="home-editor-links">
+      <strong>Links</strong>
+      ${card.links.map((link,linkIndex)=>`<div class="home-editor-link">
+        <input class="link-label" aria-label="Link label" data-card="${index}" data-link="${linkIndex}" data-field="label" value="${esc(link.label)}" placeholder="Label" required>
+        <input class="link-path" aria-label="Workbench path" data-card="${index}" data-link="${linkIndex}" data-field="path" value="${esc(link.path)}" placeholder="hopkins:/folder/" required>
+        <select aria-label="Link type" data-card="${index}" data-link="${linkIndex}" data-field="kind"><option value="dir" ${link.kind==='dir'?'selected':''}>Folder</option><option value="file" ${link.kind==='file'?'selected':''}>File</option></select>
+        <button type="button" data-action="link-up" data-card="${index}" data-link="${linkIndex}" ${linkIndex===0?'disabled':''} title="Move link up">↑</button>
+        <button type="button" data-action="link-down" data-card="${index}" data-link="${linkIndex}" ${linkIndex===card.links.length-1?'disabled':''} title="Move link down">↓</button>
+        <button type="button" data-action="remove-link" data-card="${index}" data-link="${linkIndex}" class="danger" title="Remove link">×</button>
+      </div>`).join('')}
+      <button type="button" data-action="add-link" data-card="${index}">+ Add link</button>
+    </div>
+  </section>`).join('');
+  homeCardEditor.scrollTop=scroll;
+}
+
+homeCardEditor.addEventListener('input',event=>{
+  const target=event.target;
+  if(target.dataset.homeField){editingHomeHero[target.dataset.homeField]=target.value;return}
+  if(!target.dataset.field)return;
+  const card=editingHomeCards[Number(target.dataset.card)];
+  const entry=target.dataset.link===undefined?card:card.links[Number(target.dataset.link)];
+  entry[target.dataset.field]=target.type==='checkbox'?target.checked:target.value;
+});
+homeCardEditor.addEventListener('change',event=>{
+  if(event.target.matches('select,input[type="checkbox"]'))event.target.dispatchEvent(new Event('input',{bubbles:true}));
+});
+homeCardEditor.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-action]');
+  if(!button)return;
+  const index=Number(button.dataset.card);
+  const card=editingHomeCards[index];
+  if(button.dataset.action==='up'&&index>0)[editingHomeCards[index-1],editingHomeCards[index]]=[card,editingHomeCards[index-1]];
+  if(button.dataset.action==='down'&&index<editingHomeCards.length-1)[editingHomeCards[index+1],editingHomeCards[index]]=[card,editingHomeCards[index+1]];
+  if(button.dataset.action==='remove-card')editingHomeCards.splice(index,1);
+  if(button.dataset.action==='add-link')card.links.push({label:'',path:'',kind:'dir'});
+  const linkIndex=Number(button.dataset.link);
+  if(button.dataset.action==='link-up'&&linkIndex>0)[card.links[linkIndex-1],card.links[linkIndex]]=[card.links[linkIndex],card.links[linkIndex-1]];
+  if(button.dataset.action==='link-down'&&linkIndex<card.links.length-1)[card.links[linkIndex+1],card.links[linkIndex]]=[card.links[linkIndex],card.links[linkIndex+1]];
+  if(button.dataset.action==='remove-link')card.links.splice(linkIndex,1);
+  renderHomeCardEditor();
+});
+document.getElementById('addHomeCardBtn').onclick=()=>{
+  editingHomeCards.push({label:'',title:'',links:[],style:'links'});
+  renderHomeCardEditor();
+  homeCardEditor.scrollTop=homeCardEditor.scrollHeight;
+};
+document.getElementById('cancelHomeSettingsBtn').onclick=()=>homeSettingsDialog.close();
+homeSettingsForm.onsubmit=async event=>{
+  event.preventDefault();
+  homeSettingsError.hidden=true;
+  try{
+    const result=await window.workbench.saveHomeShortcuts({config:{hero:editingHomeHero,cards:editingHomeCards},expectedHash:homeShortcutsHash});
+    homeShortcuts=result.config;
+    homeShortcutsHash=result.sha256;
+    homeSettingsDialog.close();
+    if(isHome)await showHome(false);
+    showToast('Home updated');
+  }catch(err){homeSettingsError.textContent=err.message||String(err);homeSettingsError.hidden=false}
+};
+async function openHomeSettings(){
+  const result=await window.workbench.homeShortcuts();
+  homeShortcutsHash=result.sha256;
+  editingHomeHero=JSON.parse(JSON.stringify(result.config.hero));
+  editingHomeCards=JSON.parse(JSON.stringify(result.config.cards));
+  homeSettingsError.hidden=true;
+  renderHomeCardEditor();
+  homeSettingsDialog.showModal();
+}
+
 function homeDashboard(){
   const today=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date());
+  const cards=homeShortcuts.cards.map(card=>{
+    const links=card.links.map(link=>`<a href="#" class="${card.style==='chips'?'home-chip ':''}wb-link" data-kind="${esc(link.kind)}" data-path="${esc(link.path)}">${esc(link.label)}${card.style==='chips'?'':' <span>→</span>'}</a>`).join('');
+    return `<div class="home-card">
+      <div class="home-card-label">${esc(card.label)}</div>
+      <h2>${esc(card.title==='$today'?today:card.title)}</h2>
+      ${card.style==='chips'?`<div class="home-chip-row">${links}</div>`:links}
+      ${card.showAgenda?`<div class="home-agenda-preview"><div class="home-agenda-label">Upcoming</div><div class="home-agenda-loading">Loading…</div></div><a href="#" class="agenda-open">View 60-day agenda <span>→</span></a>`:''}
+      ${card.note?`<p class="home-card-note">${esc(card.note)}</p>`:''}
+      ${card.showRecentNotes?'<div class="recent-notes-preview"><div class="home-agenda-label">Recently edited notes</div><div class="home-agenda-loading">Loading…</div></div>':''}
+    </div>`;
+  }).join('');
   return `<main class="home-dashboard">
     <section class="home-hero">
       <div>
-        <div class="home-kicker">LOCAL-FIRST ACADEMIC WORKSPACE</div>
-        <h1>Norcini Workbench</h1>
-        <p>One place to navigate research, teaching, notes, documents, code, and a real Bash terminal without moving the underlying files.</p>
+        <div class="home-kicker">${esc(homeShortcuts.hero.kicker)}</div>
+        <h1>${esc(homeShortcuts.hero.title)}</h1>
+        <p>${esc(homeShortcuts.hero.description)}</p>
       </div>
-      <div class="home-badge">All local.<br><strong>Always yours.</strong></div>
+      <div class="home-badge">${esc(homeShortcuts.hero.badgeTop)}<br><strong>${esc(homeShortcuts.hero.badgeBottom)}</strong></div>
+      <button type="button" class="home-config-edit">Edit</button>
     </section>
 
     <section class="home-grid">
-      <div class="home-card">
-        <div class="home-card-label">Today</div>
-        <h2>${esc(today)}</h2>
-
-        <a href="#" class="wb-link" data-kind="file" data-path="org:/home.org">Open home.org <span>→</span></a>
-        <a href="#" class="wb-link" data-kind="file" data-path="org:/inbox.org">Process Org inbox <span>→</span></a>
-        <a href="#" class="wb-link" data-kind="file" data-path="org:/master.org">Open master.org <span>→</span></a>
-
-        <div id="homeAgendaPreview" class="home-agenda-preview">
-          <div class="home-agenda-label">Upcoming</div>
-          <div class="home-agenda-loading">Loading…</div>
-        </div>
-
-        <a href="#" class="agenda-open">
-          View 60-day agenda <span>→</span>
-        </a>
-      </div>
-
-      <div class="home-card">
-        <div class="home-card-label">Research projects</div>
-        <h2>Projects</h2>
-        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/damicm/">DAMIC-M <span>→</span></a>
-        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/ccd_discovery/">CCD Discovery <span>→</span></a>
-        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/idg/">IDG <span>→</span></a>
-        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/projects/rxtr_skippers/">RXTR Skippers <span>→</span></a>
-      </div>
-
-      <div class="home-card">
-        <div class="home-card-label">Teaching</div>
-        <h2>Current course</h2>
-        <a href="#" class="wb-link" data-kind="dir" data-path="hopkins:/teaching/2026/as_171_301/">AS.171.301 <span>→</span></a>
-        <p class="home-card-note">Browse lecture notes, LaTeX, PDFs, figures, code, and course materials directly from the filesystem.</p>
-      </div>
-
-      <div class="home-card">
-        <div class="home-card-label">Org library</div>
-        <h2>Notes & context</h2>
-        <div class="home-chip-row">
-          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/meetings/">Meetings</a>
-          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/lab_notebook/">Lab notebook</a>
-          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/reference/">Reference</a>
-          <a href="#" class="home-chip wb-link" data-kind="dir" data-path="org:/library/teaching/">Teaching</a>
-        </div>
-      </div>
+      ${cards}
     </section>
 <section class="home-card syntax-guide-card">
       <div class="home-card-label">Reference</div>
@@ -828,6 +975,12 @@ print("hello")
 
 async function showHome(record=true){
   if(!(await maybeAbandon())) return;
+  try{
+    const result=await window.workbench.homeShortcuts();
+    homeShortcuts=result.config;
+    homeShortcutsHash=result.sha256;
+    if(result.warning)showToast(result.warning,true);
+  }catch(err){showToast(err.message||String(err),true)}
   isHome=true;
   currentPath=null;
   currentHash=null;
@@ -844,22 +997,43 @@ async function showHome(record=true){
 
   preview.onload=()=>{
     loadHomeAgendaPreview();
+    loadRecentNotesPreview();
   };
 }
 
 function previewShell(body){
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   body{margin:0;background:#fff;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  [data-inline-line]{cursor:text;min-width:4px}
+  [data-inline-line]:hover{background:#f6f8fa}
+  [data-inline-line]:focus{outline:2px solid #54aeff;outline-offset:2px;border-radius:3px;background:#fff}
+  .inline-blank{height:12px;min-height:12px}
+  .inline-blank:focus{height:20px}
   .doc{max-width:920px;margin:0 auto;padding:28px 36px 90px}h1,h2,h3,h4{line-height:1.25;margin:24px 0 12px}h1{font-size:2em;border-bottom:1px solid #d8dee4;padding-bottom:.3em}h2{font-size:1.5em;border-bottom:1px solid #d8dee4;padding-bottom:.3em}
   p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
-  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}.nb-output{margin:8px 0 18px;padding-left:16px;border-left:3px solid #d8dee4}.nb-output img{max-width:100%}.nb-error{border-left-color:#cf222e}
+  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
+  .notebook{max-width:1000px}.nb-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #d8dee4}.nb-header h1{border:0;margin:0 0 8px;padding:0;font-size:28px}.nb-header p{margin:0;color:#57606a;font-size:14px;line-height:1.5}
+  .nb-empty{padding:28px;border:1px dashed #d0d7de;border-radius:8px;background:#f6f8fa;color:#656d76;text-align:center}
+  .nb-markdown{padding:8px 16px;margin:0 0 18px;border-left:3px solid #d8dee4}.nb-markdown>:first-child{margin-top:0}
+  .nb-cell{margin:0 0 22px;border:1px solid #d8dee4;border-radius:9px;overflow:hidden;background:#fff}
+  .nb-cell-label{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-bottom:1px solid #d8dee4;background:#f6f8fa;color:#57606a;font-size:12px;font-weight:600}
+  .nb-source{margin:0;border:0;border-radius:0;background:#fff;padding:16px;white-space:pre;overflow:auto}
+  .nb-output{padding:12px 16px;border-top:1px solid #d8dee4}.nb-output-label{margin-bottom:8px;color:#656d76;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .nb-output pre{margin:0;border:0;background:#f6f8fa}.nb-output img{display:block;max-width:100%;max-height:600px;width:auto;height:auto;object-fit:contain}
+  .nb-stderr{background:#fff8f6}.nb-stderr pre{background:#fff1ee}.nb-error{background:#fff8f6}.nb-error .nb-output-label{color:#cf222e}.nb-error pre{background:#fff1ee;color:#a40e26}
+  .nb-no-output{margin:0;padding:10px 16px;border-top:1px solid #d8dee4;color:#8c959f;font-size:12px}
   .pdf{position:fixed;inset:0;border:0;width:100%;height:100%}.image{max-width:100%;height:auto;display:block;margin:20px auto}
-  .home-dashboard{max-width:1080px;margin:0 auto;padding:34px 38px 80px}.home-hero{display:flex;justify-content:space-between;gap:40px;align-items:flex-start;padding:4px 0 28px;border-bottom:1px solid #d8dee4}.home-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;color:#57606a;margin-bottom:8px}.home-hero h1{font-size:34px;border:0;margin:0 0 8px;padding:0}.home-hero p{font-size:16px;line-height:1.55;color:#57606a;max-width:720px;margin:0}.home-badge{font-size:13px;line-height:1.5;color:#57606a;text-align:right;white-space:nowrap;padding-top:4px}.home-badge strong{color:#1f2328}.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.home-card{border:1px solid #d8dee4;border-radius:10px;padding:18px;background:#fff;box-shadow:0 1px 0 rgba(31,35,40,.03)}.home-card-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#656d76}.home-card h2{font-size:18px;border:0;padding:0;margin:5px 0 12px}.wb-link{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #f0f1f2;font-size:14px}.wb-link:first-of-type{border-top:0}.home-card-note{font-size:13px;color:#656d76;margin-top:8px}.home-chip-row{display:flex;flex-wrap:wrap;gap:7px}.home-chip{display:inline-block;border:1px solid #d0d7de;background:#f6f8fa;border-radius:999px;padding:5px 9px;font-size:12px}.home-shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.home-shortcuts>div{padding:14px 16px;background:#f6f8fa;border-radius:8px}.home-shortcuts strong{display:block;font-size:13px;margin-bottom:4px}.home-shortcuts span{font-size:12px;color:#656d76;line-height:1.45}@media(max-width:800px){.home-grid,.home-shortcuts{grid-template-columns:1fr}.home-hero{display:block}.home-badge{text-align:left;margin-top:14px}}
+  .home-dashboard{max-width:1080px;margin:0 auto;padding:34px 38px 80px}.home-hero{position:relative;display:flex;justify-content:space-between;gap:40px;align-items:flex-start;padding:4px 0 72px;border-bottom:1px solid #d8dee4}.home-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;color:#57606a;margin-bottom:8px}.home-hero h1{font-size:34px;border:0;margin:0 0 8px;padding:0}.home-hero p{font-size:16px;line-height:1.55;color:#57606a;max-width:720px;margin:0}.home-badge{font-size:13px;line-height:1.5;color:#57606a;text-align:right;white-space:nowrap;padding-top:4px}.home-badge strong{color:#1f2328}.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.home-card{border:1px solid #d8dee4;border-radius:10px;padding:18px;background:#fff;box-shadow:0 1px 0 rgba(31,35,40,.03)}.home-card-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#656d76}.home-card h2{font-size:18px;border:0;padding:0;margin:5px 0 12px}.wb-link{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #f0f1f2;font-size:14px}.wb-link:first-of-type{border-top:0}.home-card-note{font-size:13px;color:#656d76;margin-top:8px}.home-chip-row{display:flex;flex-wrap:wrap;gap:7px}.home-chip{display:inline-block;border:1px solid #d0d7de;background:#f6f8fa;border-radius:999px;padding:5px 9px;font-size:12px}.home-shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.home-shortcuts>div{padding:14px 16px;background:#f6f8fa;border-radius:8px}.home-shortcuts strong{display:block;font-size:13px;margin-bottom:4px}.home-shortcuts span{font-size:12px;color:#656d76;line-height:1.45}@media(max-width:800px){.home-grid,.home-shortcuts{grid-template-columns:1fr}.home-hero{display:block}.home-badge{text-align:left;margin-top:14px}}
 
 
+  .home-config-edit{position:absolute;right:0;bottom:18px;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa;color:#24292f;padding:6px 11px;font:inherit;font-size:12px;cursor:pointer}
+  .home-config-edit:hover{background:#eaeef2}
   .home-agenda-preview{margin-top:14px;padding-top:12px;border-top:1px solid #d8dee4}
+  .recent-notes-preview{margin-top:14px;padding-top:12px;border-top:1px solid #d8dee4}
+  .recent-notes-preview .wb-link{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .recent-notes-preview .wb-link span{color:#656d76;white-space:nowrap}
   .home-agenda-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#656d76;margin-bottom:5px}
   .home-agenda-date{display:block;font-size:10px;font-weight:600;color:#656d76;margin-bottom:1px}.home-agenda-text{display:block}.home-agenda-item{font-size:12px;line-height:1.45;color:#24292f;padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .home-agenda-loading,.home-agenda-empty{font-size:12px;color:#8c959f;padding:3px 0}
@@ -911,16 +1085,88 @@ function previewShell(body){
   .agenda-loading,.agenda-empty{padding:40px 0;color:#656d76}
   .agenda-error{padding-top:20px}
 
+  .output-gallery{max-width:1100px;margin:0 auto;padding:30px 36px 90px}
+  .output-gallery h1{font-size:28px;border:0;margin:0 0 5px;padding:0}
+  .output-summary{font-size:14px;color:#656d76;margin:0 0 24px}
+  .output-empty{border:1px dashed #d0d7de;border-radius:10px;background:#f6f8fa;padding:42px 28px;text-align:center}
+  .output-empty h2{font-size:18px;border:0;margin:0 0 8px;padding:0}
+  .output-empty p{max-width:540px;margin:0 auto;color:#656d76;font-size:14px;line-height:1.55}
+  .output-card{margin:0 0 24px;border:1px solid #d8dee4;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(31,35,40,.06)}
+  .output-card-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid #d8dee4;background:#f6f8fa}
+  .output-card-title{display:flex;align-items:center;gap:10px;min-width:0}
+  .output-card-title strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .output-type,.output-newest{font-size:11px;color:#57606a;white-space:nowrap}
+  .output-type{border:1px solid #d0d7de;border-radius:4px;padding:2px 5px;background:#fff;text-transform:uppercase}
+  .output-card-actions{display:flex;gap:7px;flex-shrink:0}
+  .output-action{border:1px solid #d0d7de;border-radius:6px;background:#fff;color:#24292f;padding:5px 9px;font-family:inherit;font-size:12px;line-height:1.3;cursor:pointer}
+  .output-action:hover{background:#eaeef2}
+  .output-media{display:flex;align-items:center;justify-content:center;min-height:220px;background:#f6f8fa}
+  .output-media iframe{display:block;width:100%;height:620px;max-height:75vh;border:0;background:#fff}
+  .output-media img{display:block;max-width:100%;max-height:680px;width:auto;height:auto;object-fit:contain;padding:20px}
+  @media(max-width:650px){.output-gallery{padding:24px 16px 60px}.output-card-header{align-items:flex-start;flex-direction:column}.output-media iframe{height:480px}}
+
   </style></head><body>${body}<script>
+  document.addEventListener('input',e=>{
+    const block=e.target.closest('[data-inline-line]');
+    if(block)parent.postMessage({type:'inlineInput',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),html:block.innerHTML},'*');
+  });
+  function splitInlineSelection(block){
+    const selection=window.getSelection();
+    if(!selection.rangeCount)return null;
+    const range=selection.getRangeAt(0);
+    if(!block.contains(range.startContainer)||!block.contains(range.endContainer))return null;
+    const before=range.cloneRange();before.selectNodeContents(block);before.setEnd(range.startContainer,range.startOffset);
+    const after=range.cloneRange();after.selectNodeContents(block);after.setStart(range.endContainer,range.endOffset);
+    const html=fragment=>{const box=document.createElement('div');box.appendChild(fragment);return box.innerHTML};
+    return {range,beforeHtml:html(before.cloneContents()),afterHtml:html(after.cloneContents()),beforeText:before.cloneContents().textContent,afterText:after.cloneContents().textContent};
+  }
+  document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){
+      e.preventDefault();parent.postMessage({type:'inlineSave'},'*');return;
+    }
+    const block=e.target.closest('[data-inline-line]');
+    if(!block||!['Enter','Backspace','Delete'].includes(e.key))return;
+    const split=splitInlineSelection(block);
+    if(!split)return;
+    if(e.key==='Backspace'&&split.range.collapsed&&!split.beforeText){
+      e.preventDefault();parent.postMessage({type:'inlineJoin',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),direction:'back'},'*');return;
+    }
+    if(e.key==='Delete'&&split.range.collapsed&&!split.afterText){
+      e.preventDefault();parent.postMessage({type:'inlineJoin',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),direction:'forward'},'*');return;
+    }
+    if(e.key!=='Enter')return;
+    e.preventDefault();
+    parent.postMessage({type:'inlineEnter',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),beforeHtml:split.beforeHtml,afterHtml:split.afterHtml},'*');
+  });
+  document.addEventListener('paste',e=>{
+    const block=e.target.closest('[data-inline-line]');
+    if(!block)return;
+    const split=splitInlineSelection(block);
+    if(!split)return;
+    e.preventDefault();
+    const value=e.clipboardData.getData('text/plain').replace(/\\r\\n?/g,'\\n');
+    if(!value.includes('\\n')){
+      split.range.deleteContents();
+      const node=document.createTextNode(value);
+      split.range.insertNode(node);
+      split.range.setStartAfter(node);split.range.collapse(true);
+      const selection=window.getSelection();selection.removeAllRanges();selection.addRange(split.range);
+      block.dispatchEvent(new Event('input',{bubbles:true}));
+      return;
+    }
+    parent.postMessage({type:'inlinePaste',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),beforeHtml:split.beforeHtml,afterHtml:split.afterHtml,text:value},'*');
+  });
   document.addEventListener('click',e=>{
     const t=e.target.closest('.task-toggle');if(t){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(t.dataset.line),kind:t.dataset.kind},'*');return}
-    const c=e.target.closest('.checkbox-toggle-row');if(c){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(c.dataset.line),kind:'checkbox'},'*');return}
+    const c=e.target.closest('.checkbox-toggle-row');if(c&&!e.target.closest('[data-inline-line]')){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(c.dataset.line),kind:'checkbox'},'*');return}
     const w=e.target.closest('a[data-web]');if(w){e.preventDefault();parent.postMessage({type:'openWeb',url:w.dataset.web},'*');return}
     const f=e.target.closest('.org-file-link');if(f){e.preventDefault();parent.postMessage({type:'openOrgLink',target:f.dataset.target},'*');return}
     const p=e.target.closest('.wb-link');if(p){e.preventDefault();parent.postMessage({type:'openWorkbenchPath',path:p.dataset.path,kind:p.dataset.kind},'*');return}
+    const h=e.target.closest('.home-config-edit');if(h){e.preventDefault();parent.postMessage({type:'editHomeShortcuts'},'*');return}
     const a=e.target.closest('.agenda-open');if(a){e.preventDefault();parent.postMessage({type:'openAgenda'},'*');return}
     const r=e.target.closest('.agenda-refresh');if(r){e.preventDefault();parent.postMessage({type:'refreshAgenda'},'*');return}
     const i=e.target.closest('.agenda-item-link');if(i){e.preventDefault();parent.postMessage({type:'openAgendaItem',path:i.dataset.agendaPath,line:Number(i.dataset.agendaLine||1)},'*');return}
+    const o=e.target.closest('.output-action');if(o){e.preventDefault();parent.postMessage({type:'outputAction',action:o.dataset.outputAction,path:o.dataset.outputPath},'*');return}
   });
   <\/script></body></html>`;
 }
@@ -993,11 +1239,20 @@ async function renderRootOutputs(){
   }
 
   if(!outputs.length){
+    const hint=explicitNames.length
+      ? 'No files named in this source were found beside it. Run the code, then check the output filenames.'
+      : lastRunStartedAt.has(currentPath)
+        ? 'The latest Workbench run has no new PDF or image output here. Check the terminal for errors or refresh after the files are written.'
+        : 'Run this source file to see PDF and image outputs saved in the same folder.';
+
     return previewShell(`
-      <article class="doc">
+      <article class="output-gallery">
         <h1>Generated outputs</h1>
-        <p>No PDF or image outputs found yet.</p>
-        <p>Run the macro to generate plots.</p>
+        <p class="output-summary">PDF and image files associated with this source</p>
+        <div class="output-empty">
+          <h2>No outputs to show yet</h2>
+          <p>${hint}</p>
+        </div>
       </article>
     `);
   }
@@ -1005,91 +1260,41 @@ async function renderRootOutputs(){
   const cards=outputs.map((item,index)=>{
     const name=esc(item.name);
     const url=esc(item.fileUrl);
-    const newest=index===0
-      ? '<span style="font-size:11px;color:#656d76">Newest</span>'
-      : '';
-
-    if(item.ext==='.pdf'){
-      return `
-        <section style="
-          margin-bottom:28px;
-          border:1px solid #d8dee4;
-          border-radius:8px;
-          overflow:hidden;
-          background:white;
-        ">
-          <div style="
-            padding:10px 14px;
-            background:#f6f8fa;
-            border-bottom:1px solid #d8dee4;
-            display:flex;
-            justify-content:space-between;
-          ">
-            <strong>${name}</strong>
-            ${newest}
-          </div>
-
-          <iframe
-            src="${url}?v=${item.mtimeMs}#view=FitH&navpanes=0&toolbar=0"
-            style="
-              display:block;
-              width:100%;
-              height:720px;
-              border:0;
-            "
-          ></iframe>
-        </section>
-      `;
-    }
+    const outputPath=esc(item.path);
+    const isPdf=item.ext==='.pdf';
+    const media=isPdf
+      ? `<iframe src="${url}?v=${item.mtimeMs}#view=FitH&navpanes=0&toolbar=0" title="${name}"></iframe>`
+      : `<img src="${url}?v=${item.mtimeMs}" alt="${name}" loading="lazy">`;
 
     return `
-      <section style="
-        margin-bottom:28px;
-        border:1px solid #d8dee4;
-        border-radius:8px;
-        overflow:hidden;
-        background:white;
-      ">
-        <div style="
-          padding:10px 14px;
-          background:#f6f8fa;
-          border-bottom:1px solid #d8dee4;
-          display:flex;
-          justify-content:space-between;
-        ">
-          <strong>${name}</strong>
-          ${newest}
-        </div>
-
-        <img
-          src="${url}?v=${item.mtimeMs}"
-          alt="${name}"
-          style="
-            display:block;
-            max-width:100%;
-            height:auto;
-            margin:0 auto;
-            padding:16px;
-            box-sizing:border-box;
-          "
-        >
+      <section class="output-card">
+        <header class="output-card-header">
+          <div class="output-card-title">
+            <span class="output-type">${esc(item.ext.slice(1))}</span>
+            <strong title="${name}">${name}</strong>
+            ${index===0?'<span class="output-newest">Newest</span>':''}
+          </div>
+          <div class="output-card-actions">
+            <button class="output-action" data-output-action="open" data-output-path="${outputPath}">Open in macOS</button>
+            <button class="output-action" data-output-action="reveal" data-output-path="${outputPath}">Reveal in Finder</button>
+          </div>
+        </header>
+        <div class="output-media">${media}</div>
       </section>
     `;
   }).join('');
 
   return previewShell(`
-    <article class="doc" style="max-width:1100px;margin:0 auto">
+    <article class="output-gallery">
       <h1>Generated outputs</h1>
-      <p style="color:#656d76;margin-bottom:22px">
-        ${outputs.length} generated output${outputs.length===1?'':'s'}
-      </p>
+      <p class="output-summary">${outputs.length} PDF or image output${outputs.length===1?'':'s'} associated with this source</p>
       ${cards}
     </article>
   `);
 }
 
-async function refreshPreview(){
-  if(!currentPath){if(isHome){preview.srcdoc=previewShell(homeDashboard())}else{preview.srcdoc=previewShell('<article class="doc"><h1>Norcini Workbench</h1><p>Select a file.</p></article>')}return}
+async function refreshPreview({preserveScroll=false}={}){
+  if(!currentPath){if(isHome){const result=await window.workbench.homeShortcuts();homeShortcuts=result.config;homeShortcutsHash=result.sha256;if(result.warning)showToast(result.warning,true);preview.srcdoc=previewShell(homeDashboard())}else{preview.srcdoc=previewShell(`<article class="doc"><h1>${esc(currentDir)}</h1><p>Select a file from Files.</p></article>`)}return}
   const ext=extOf(currentPath);
 
   const isRootMacro=currentPath && currentPath.endsWith('.C');
@@ -1153,21 +1358,186 @@ async function refreshPreview(){
     preview.src=info.siblingPdf+'?v='+Date.now()+'#view=FitH&navpanes=0&toolbar=0';
     return;
   }
+  if(ext==='.tex'){
+    preview.removeAttribute('src');
+    preview.srcdoc=previewShell('<article class="doc"><h1>PDF not built yet</h1><p>Edit the LaTeX source, then use Build PDF. Successful builds appear here automatically.</p></article>');
+    return;
+  }
   preview.removeAttribute('src');
   let text=editor.value;
   if(!dirty || editor.readOnly){
     try{text=(await window.workbench.readFile(currentPath)).content}catch{}
   }
   let body;
+  if(['.org','.md'].includes(ext))inlineRenderId++;
   if(ext==='.org')body=renderOrg(text);
-  else if(ext==='.md')body=renderMarkdown(text);
+  else if(ext==='.md')body=renderMarkdown(text,true);
   else if(ext==='.ipynb')body=renderNotebook(text);
   else body=`<article class="doc"><h1>${esc(currentPath.split('/').pop())}</h1><pre><code>${esc(text)}</code></pre></article>`;
+  if(preserveScroll && ['.org','.md'].includes(ext)){
+    let scrollY=0;
+    try{scrollY=preview.contentWindow.scrollY||0}catch{}
+    const restore=()=>{
+      try{preview.contentWindow.scrollTo(0,scrollY)}catch{}
+    };
+    preview.addEventListener('load',restore,{once:true});
+  }
   preview.srcdoc=previewShell(body);
+}
+function inlineHtmlToSource(html,ext){
+  const root=document.createElement('div');
+  root.innerHTML=html;
+  const walk=node=>{
+    if(node.nodeType===Node.TEXT_NODE)return node.nodeValue;
+    if(node.nodeType!==Node.ELEMENT_NODE)return '';
+    const tag=node.tagName.toLowerCase();
+    if(tag==='br')return '';
+    const value=[...node.childNodes].map(walk).join('');
+    if(ext==='.org'){
+      if(tag==='strong'||tag==='b')return `*${value}*`;
+      if(tag==='code')return `~${value}~`;
+      if(tag==='em'||tag==='i')return `/${value}/`;
+      if(tag==='a'&&node.dataset.web)return `[[${node.dataset.web}][${value}]]`;
+      if(tag==='a'&&node.classList.contains('org-file-link'))return `[[file:${node.dataset.target}][${value}]]`;
+    }
+    if(ext==='.md'){
+      if(tag==='strong'||tag==='b')return `**${value}**`;
+      if(tag==='code')return '`'+value+'`';
+      if(tag==='em'||tag==='i')return `*${value}*`;
+    }
+    return value;
+  };
+  return [...root.childNodes].map(walk).join('');
+}
+function inlinePrefix(line,ext){
+  const pattern=ext==='.org'
+    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE)\s+|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
+    : /^(#{1,6}\s+|\s*[-*+]\s+)/;
+  return line.match(pattern)?.[0]||'';
+}
+function nextInlinePrefix(line,ext){
+  if(ext==='.org'){
+    const check=line.match(/^(\s*[-+])\s+\[[ Xx]\]\s+/);
+    if(check)return check[1]+' [ ] ';
+  }
+  const bullet=line.match(/^(\s*[-+*])\s+/);
+  return bullet&&!(ext==='.org'&&bullet[1].trim()==='*')?bullet[1]+' ':'';
+}
+function scheduleInlineSave(){
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(async()=>{
+    if(dirty&&currentPath)await saveCurrent({quiet:true,buildLatex:false});
+  },1000);
+}
+function updateInlineLine(line,html){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(line)||line<0||line>=lines.length)return;
+  const next=inlinePrefix(lines[line],extOf(currentPath))+inlineHtmlToSource(html,extOf(currentPath));
+  if(next===lines[line])return;
+  lines[line]=next;
+  editor.value=lines.join('\n');
+  markDirty(true);
+  scheduleInlineSave();
+}
+async function insertInlineLine(line,beforeHtml,afterHtml){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(line)||line<0||line>=lines.length)return;
+  const ext=extOf(currentPath);
+  const original=lines[line];
+  lines.splice(line,1,
+    inlinePrefix(original,ext)+inlineHtmlToSource(beforeHtml,ext),
+    nextInlinePrefix(original,ext)+inlineHtmlToSource(afterHtml,ext)
+  );
+  editor.value=lines.join('\n');
+  markDirty(true);
+  scheduleInlineSave();
+  const focusNew=()=>{
+    const block=preview.contentDocument?.querySelector(`[data-inline-line="${line+1}"]`);
+    if(!block)return;
+    block.focus();
+    const range=preview.contentDocument.createRange();
+    range.selectNodeContents(block);
+    range.collapse(true);
+    const selection=preview.contentWindow.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  preview.addEventListener('load',focusNew,{once:true});
+  await refreshPreview({preserveScroll:true});
+}
+async function pasteInlineLines(line,beforeHtml,afterHtml,text){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(line)||line<0||line>=lines.length)return;
+  const ext=extOf(currentPath);
+  const pieces=String(text).split('\n');
+  const first=inlinePrefix(lines[line],ext)+inlineHtmlToSource(beforeHtml,ext)+pieces[0];
+  const last=pieces[pieces.length-1]+inlineHtmlToSource(afterHtml,ext);
+  lines.splice(line,1,first,...pieces.slice(1,-1),last);
+  editor.value=lines.join('\n');
+  markDirty(true);
+  scheduleInlineSave();
+  const focusLast=()=>{
+    const block=preview.contentDocument?.querySelector(`[data-inline-line="${line+pieces.length-1}"]`);
+    if(!block)return;
+    block.focus();
+    const range=preview.contentDocument.createRange();
+    range.selectNodeContents(block);range.collapse(false);
+    const selection=preview.contentWindow.getSelection();
+    selection.removeAllRanges();selection.addRange(range);
+  };
+  preview.addEventListener('load',focusLast,{once:true});
+  await refreshPreview({preserveScroll:true});
+}
+async function joinInlineLines(line,direction){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  const left=direction==='back'?line-1:line;
+  const right=left+1;
+  if(left<0||right>=lines.length)return;
+  if(!preview.contentDocument?.querySelector(`[data-inline-line="${direction==='back'?left:right}"]`))return;
+  const next=lines[left]+lines[right].slice(inlinePrefix(lines[right],extOf(currentPath)).length);
+  lines.splice(left,2,next);
+  editor.value=lines.join('\n');
+  markDirty(true);
+  scheduleInlineSave();
+  const focusJoined=()=>{
+    const block=preview.contentDocument?.querySelector(`[data-inline-line="${left}"]`);
+    if(!block)return;
+    block.focus();
+    const range=preview.contentDocument.createRange();
+    range.selectNodeContents(block);range.collapse(false);
+    const selection=preview.contentWindow.getSelection();
+    selection.removeAllRanges();selection.addRange(range);
+  };
+  preview.addEventListener('load',focusJoined,{once:true});
+  await refreshPreview({preserveScroll:true});
 }
 window.addEventListener('message',async e=>{
   if(!e.data)return;
-  if(e.data.type==='toggleTask'){
+  if(e.data.type==='inlineInput'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    updateInlineLine(e.data.line,e.data.html);
+  }else if(e.data.type==='inlineEnter'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await insertInlineLine(e.data.line,e.data.beforeHtml,e.data.afterHtml);
+  }else if(e.data.type==='inlinePaste'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await pasteInlineLines(e.data.line,e.data.beforeHtml,e.data.afterHtml,e.data.text);
+  }else if(e.data.type==='inlineJoin'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await joinInlineLines(e.data.line,e.data.direction);
+  }else if(e.data.type==='inlineSave'){
+    if(e.source!==preview.contentWindow)return;
+    clearTimeout(autoSaveTimer);
+    await saveCurrent({quiet:false,buildLatex:false});
+  }else if(e.data.type==='toggleTask'){
+    if(dirty){
+      clearTimeout(autoSaveTimer);
+      if(!(await saveCurrent({quiet:true,buildLatex:false})))return;
+    }
     let scrollY=0;
 
     try{
@@ -1207,7 +1577,20 @@ window.addEventListener('message',async e=>{
 }else if(e.data.type==='openWeb'){
     window.workbench.openExternal(e.data.url);
   }else if(e.data.type==='openWorkbenchPath'){
-    try{if(e.data.kind==='dir')await loadDir(e.data.path);else await openFile(e.data.path)}catch(err){showToast(err.message,true)}
+    try{
+      if(e.data.kind==='dir')await loadDir(e.data.path);
+      else await openFile(e.data.path);
+      await syncTerminalToPath(e.data.path);
+    }catch(err){showToast(err.message,true)}
+  }else if(e.data.type==='outputAction'){
+    if(e.source!==preview.contentWindow)return;
+    try{
+      if(e.data.action==='open')await window.workbench.openDefault(e.data.path);
+      else if(e.data.action==='reveal')await window.workbench.reveal(e.data.path);
+    }catch(err){showToast(err.message||String(err),true)}
+  }else if(e.data.type==='editHomeShortcuts'){
+    if(e.source!==preview.contentWindow)return;
+    try{await openHomeSettings()}catch(err){showToast(err.message||String(err),true)}
   }else if(e.data.type==='openAgenda'){
     await showAgenda();
 
@@ -1334,12 +1717,12 @@ terminalHost.addEventListener('click',()=>term.focus());
 window.workbench.onTerminalData(({id,data})=>{if(id===terminalId)term.write(data)});
 window.workbench.onTerminalExit(({id})=>{if(id===terminalId){term.write('\r\n[terminal exited]\r\n');terminalId=null}});
 
-window.workbench.onWorkbenchOpenPath(async ({path,type})=>{
+window.workbench.onWorkbenchOpenPath(async ({path,type,source})=>{
   try{
     const rootName=path.split(':/')[0];
 
     if(type==='dir'){
-      await loadDir(path,false);
+      await loadDir(path,false,source==='cwd');
 
       document.querySelectorAll('.root-tab').forEach(btn=>{
         const btnRoot=(btn.dataset.root||'').split(':/')[0];
@@ -1351,7 +1734,6 @@ window.workbench.onWorkbenchOpenPath(async ({path,type})=>{
 
     // Open the requested file first.
     await openFile(path);
-    setEditorVisible(true);
 
     // Then force Files to follow the opened file.
     const parentDir=dirname(path);
@@ -1405,11 +1787,12 @@ async function sendBuildCommand(){
     lastRunStartedAt.set(pathBeingRun, Date.now());
     if(!terminalId)await createTerminal();
     await window.workbench.terminalWrite({id:terminalId,data:cmd+'\r'});
-    showToast('Sent to Bash terminal');
+    showToast(extOf(pathBeingRun)==='.ipynb'
+      ? 'Running all notebook cells in Bash terminal'
+      : 'Sent to Bash terminal');
   }catch(e){showToast(e.message,true)}
 }
 runBtn.onclick=sendBuildCommand;buildBtn.onclick=sendBuildCommand;runNotebookBtn.onclick=sendBuildCommand;
-
 document.getElementById('terminalRestartBtn').onclick=createTerminal;
 
 document.getElementById('saveBtn').onclick=saveCurrent;
@@ -1418,8 +1801,25 @@ document.getElementById('refreshPreviewBtn').onclick=refreshPreview;
 backBtn.onclick=()=>goHistory(-1);
 forwardBtn.onclick=()=>goHistory(1);
 openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
-document.getElementById('toggleEditorBtn').onclick=()=>setEditorVisible(!editorVisible);
+document.getElementById('toggleEditorBtn').onclick=()=>{
+  setEditorVisible(!editorVisible);
+  if(editorVisible)editor.focus();
+};
 document.getElementById('homeBtn').onclick=()=>showHome();
+document.getElementById('filesUpBtn').onclick=async()=>{
+  try{
+    const target=await window.workbench.parentDirectory(currentDir);
+    await loadDir(target);
+    await syncTerminalToPath(target);
+  }catch(err){showToast(err.message||String(err),true)}
+};
+document.getElementById('filesHomeBtn').onclick=async()=>{
+  try{
+    const target=await window.workbench.homeDirectory();
+    await loadDir(target);
+    await syncTerminalToPath(target);
+  }catch(err){showToast(err.message||String(err),true)}
+};
 document.querySelectorAll('.root-tab').forEach(btn=>btn.onclick=async()=>{
   document.querySelectorAll('.root-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -1532,7 +1932,7 @@ window.workbench.onFsChanged(()=>{
 
   fsTimer=setTimeout(async()=>{
     try{
-      await loadDir(currentDir,false);
+      await loadDir(currentDir,false,true);
     }catch{}
 
     if(

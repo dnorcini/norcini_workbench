@@ -1,0 +1,51 @@
+{
+  "hero": {
+    "kicker": "LOCAL-FIRST ACADEMIC WORKSPACE",
+    "title": "Norcini Workbench",
+    "description": "One place to navigate research, teaching, notes, documents, code, and a real Bash terminal without moving the underlying files.",
+    "badgeTop": "All local.",
+    "badgeBottom": "Always yours."
+  },
+  "cards": [
+    {
+      "label": "Today",
+      "title": "$today",
+      "showAgenda": true,
+      "links": [
+        { "label": "Open home.org", "path": "org:/home.org", "kind": "file" },
+        { "label": "Process Org inbox", "path": "org:/inbox.org", "kind": "file" },
+        { "label": "Open master.org", "path": "org:/master.org", "kind": "file" }
+      ]
+    },
+    {
+      "label": "Research projects",
+      "title": "Projects",
+      "links": [
+        { "label": "DAMIC-M", "path": "hopkins:/projects/damicm/", "kind": "dir" },
+        { "label": "CCD Discovery", "path": "hopkins:/projects/ccd_discovery/", "kind": "dir" },
+        { "label": "IDG", "path": "hopkins:/projects/idg/", "kind": "dir" },
+        { "label": "RXTR Skippers", "path": "hopkins:/projects/rxtr_skippers/", "kind": "dir" }
+      ]
+    },
+    {
+      "label": "Teaching",
+      "title": "Current course",
+      "note": "Browse lecture notes, LaTeX, PDFs, figures, code, and course materials directly from the filesystem.",
+      "links": [
+        { "label": "AS.171.301", "path": "hopkins:/teaching/2026/as_171_301/", "kind": "dir" }
+      ]
+    },
+    {
+      "label": "Org library",
+      "title": "Notes & context",
+      "style": "chips",
+      "showRecentNotes": true,
+      "links": [
+        { "label": "Meetings", "path": "org:/library/meetings/", "kind": "dir" },
+        { "label": "Lab notebook", "path": "org:/library/lab_notebook/", "kind": "dir" },
+        { "label": "Reference", "path": "org:/library/reference/", "kind": "dir" },
+        { "label": "Teaching", "path": "org:/library/teaching/", "kind": "dir" }
+      ]
+    }
+  ]
+}

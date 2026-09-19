@@ -63,6 +63,8 @@
       <div class="panel-header">
         <span>Files</span>
         <div class="header-actions">
+          <button id="filesUpBtn" title="Up one folder" aria-label="Up one folder">↑</button>
+          <button id="filesHomeBtn" title="Your home folder" aria-label="Your home folder">⌂</button>
           <button id="newFolderBtn" title="New folder">+</button>
         </div>
       </div>
@@ -97,7 +99,7 @@
           <button id="runBtn" hidden>Run</button>
 
           <button id="buildBtn" hidden>Build PDF</button>
-          <button id="runNotebookBtn" hidden>Run notebook</button>
+          <button id="runNotebookBtn" title="Execute the whole notebook; save outputs when the run succeeds" hidden>Run all cells</button>
           <button id="openDefaultBtn">Open in macOS</button>
           <button id="refreshPreviewBtn">Refresh</button>
         </div>
@@ -160,6 +162,20 @@
       <div class="dialog-actions">
         <button type="button" id="cancelCreateItemBtn">Cancel</button>
         <button type="submit" class="primary">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="homeSettingsDialog">
+    <form id="homeSettingsForm" class="dialog-form">
+      <h2>Customize Home</h2>
+      <p class="dialog-help">Edit the Home header, cards, and links. Paths use Workbench roots such as <code>org:/</code> or <code>hopkins:/</code>. Use <code>$today</code> as a card title to show the current date.</p>
+      <div id="homeCardEditor"></div>
+      <p id="homeSettingsError" class="dialog-error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="addHomeCardBtn">+ Add card</button>
+        <button type="button" id="cancelHomeSettingsBtn">Cancel</button>
+        <button type="submit" class="primary">Save Home</button>
       </div>
     </form>
   </dialog>

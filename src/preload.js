@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('workbench', {
   getOrgAgenda: () => ipcRenderer.invoke('org-agenda:get'),
   roots: () => ipcRenderer.invoke('roots'),
+  parentDirectory: (p) => ipcRenderer.invoke('files:parent', p),
+  homeDirectory: () => ipcRenderer.invoke('files:home'),
+  getRecentNotes: () => ipcRenderer.invoke('recent-notes:get'),
   listDir: (p) => ipcRenderer.invoke('list-dir', p),
   readFile: (p) => ipcRenderer.invoke('read-file', p),
   saveFile: (payload) => ipcRenderer.invoke('save-file', payload),
@@ -18,6 +21,8 @@ contextBridge.exposeInMainWorld('workbench', {
   newNote: (payload) => ipcRenderer.invoke('new-note', payload),
   toggleOrgLine: (payload) => ipcRenderer.invoke('toggle-org-line', payload),
   buildCommand: (p) => ipcRenderer.invoke('build-command', p),
+  homeShortcuts: () => ipcRenderer.invoke('home-shortcuts:get'),
+  saveHomeShortcuts: (payload) => ipcRenderer.invoke('home-shortcuts:save', payload),
   generatedOutputs: (payload) => ipcRenderer.invoke('generated-outputs', payload),
   latestGeneratedOutput: (p) => ipcRenderer.invoke('latest-generated-output', p),
   buildLatex: (p) => ipcRenderer.invoke('build-latex', p),

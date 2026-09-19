@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
 const pty = require('node-pty');
 const { pathToFileURL } = require('url');
+const defaultHomeShortcuts = require('./config/home-shortcuts.json');
 
 const HOME = os.homedir();
 const ROOTS = {
@@ -57,6 +58,82 @@ function resolveVirtual(vpath) {
   if (!isWithin(candidate, root)) throw new Error('Path escapes allowed root');
   return candidate;
 }
+
+function homeShortcutsPath() {
+  return path.join(app.getPath('userData'), 'home-shortcuts.json');
+}
+
+async function ensureHomeShortcuts() {
+  const file = homeShortcutsPath();
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  try {
+    await fsp.writeFile(file, JSON.stringify(defaultHomeShortcuts, null, 2) + '\n', { flag: 'wx' });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+  }
+  return file;
+}
+
+function validHomeShortcut(shortcut) {
+  if (!shortcut || typeof shortcut.label !== 'string' || !shortcut.label.trim() || typeof shortcut.path !== 'string') return false;
+  try { resolveVirtual(shortcut.path); return true; } catch { return false; }
+}
+
+function homeCardsFromConfig(config) {
+  const hero = config.hero === undefined ? defaultHomeShortcuts.hero : config.hero;
+  if (!hero || ['kicker', 'title', 'description', 'badgeTop', 'badgeBottom'].some(key =>
+    typeof hero[key] !== 'string' || hero[key].length > 2000
+  )) throw new Error('Invalid Home header');
+  if (Array.isArray(config.cards)) {
+    if (config.cards.length > 30 || !config.cards.every(card =>
+      card && typeof card.label === 'string' && card.label.trim() &&
+      typeof card.title === 'string' && card.title.trim() &&
+      (card.note === undefined || typeof card.note === 'string') &&
+      (card.showAgenda === undefined || typeof card.showAgenda === 'boolean') &&
+      (card.showRecentNotes === undefined || typeof card.showRecentNotes === 'boolean') &&
+      (card.style === undefined || ['links', 'chips'].includes(card.style)) &&
+      Array.isArray(card.links) && card.links.length <= 100 &&
+      card.links.every(link => validHomeShortcut(link) && ['file', 'dir'].includes(link.kind))
+    )) throw new Error('Invalid Home cards');
+    return { hero, cards: config.cards.map(card => ({
+      ...card,
+      showRecentNotes: card.showRecentNotes ?? card.links.some(link => link.path.startsWith('org:/library/'))
+    })) };
+  }
+  if (!Array.isArray(config.projects) || !config.projects.every(validHomeShortcut) || !validHomeShortcut(config.course)) {
+    throw new Error('Invalid Home shortcuts');
+  }
+  const cards = structuredClone(defaultHomeShortcuts.cards);
+  cards[1].links = config.projects.map(item => ({ ...item, kind: 'dir' }));
+  cards[2].links = [{ ...config.course, kind: 'dir' }];
+  return { hero, cards };
+}
+
+ipcMain.handle('home-shortcuts:get', async () => {
+  const file = await ensureHomeShortcuts();
+  const raw = await fsp.readFile(file, 'utf8');
+  const sha256 = crypto.createHash('sha256').update(raw).digest('hex');
+  try {
+    return { config: homeCardsFromConfig(JSON.parse(raw)), sha256 };
+  } catch {
+    return { config: defaultHomeShortcuts, sha256, warning: 'Home settings are invalid; showing defaults. Use Customize Home to save a new layout.' };
+  }
+});
+
+ipcMain.handle('home-shortcuts:save', async (_event, { config, expectedHash }) => {
+  const checked = homeCardsFromConfig(config);
+  const file = await ensureHomeShortcuts();
+  if (expectedHash !== await hashFile(file)) throw new Error('Home settings changed outside Workbench. Reopen Customize Home before saving.');
+  const temp = file + '.' + crypto.randomUUID() + '.tmp';
+  try {
+    await fsp.writeFile(temp, JSON.stringify(checked, null, 2) + '\n', { flag: 'wx' });
+    await fsp.rename(temp, file);
+  } catch (err) {
+    await fsp.unlink(temp).catch(() => {});
+    throw err;
+  }
+  return { config: checked, sha256: await hashFile(file) };
+});
 
 function virtualize(absPath) {
   const resolved = path.resolve(absPath);
@@ -293,6 +370,36 @@ app.on('window-all-closed', () => {
 ipcMain.handle('roots', async () =>
   Object.entries(ROOTS).map(([name, abs]) => ({ name, abs }))
 );
+
+ipcMain.handle('files:parent', async (_event, vpath) => {
+  const abs = resolveVirtual(vpath);
+  return virtualize(path.dirname(abs));
+});
+
+ipcMain.handle('files:home', async () => virtualize(HOME));
+
+ipcMain.handle('recent-notes:get', async () => {
+  const library = path.join(ROOTS.org, 'library');
+  const pending = [library];
+  const notes = [];
+  while (pending.length) {
+    const dir = pending.pop();
+    let entries;
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) { pending.push(abs); continue; }
+      if (!entry.isFile() || !['.org', '.md'].includes(path.extname(entry.name).toLowerCase())) continue;
+      try {
+        const stat = await fsp.stat(abs);
+        notes.push({ path: virtualize(abs), name: path.relative(library, abs), mtimeMs: stat.mtimeMs });
+      } catch {}
+    }
+  }
+  notes.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return notes.slice(0, 5);
+});
 
 ipcMain.handle('list-dir', async (_event, vpath) => {
   const abs = resolveVirtual(vpath);
@@ -681,8 +788,6 @@ ipcMain.handle('build-command', async (_event, vpath) => {
   throw new Error('No run/build action for this file type');
 });
 
-
-
 function ensureWorkbenchBashRc() {
   const rcPath = path.join(
     app.getPath('userData'),
@@ -924,7 +1029,8 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
                 'workbench-open-path',
                 {
                   path: virt,
-                  type: 'dir'
+                  type: 'dir',
+                  source: 'cwd'
                 }
               );
             }
@@ -934,7 +1040,8 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
                 'workbench-open-path',
                 {
                   path: virt,
-                  type: st.isDirectory() ? 'dir' : 'file'
+                  type: st.isDirectory() ? 'dir' : 'file',
+                  source: 'wb'
                 }
               );
             }
