@@ -10,6 +10,8 @@ let navHistory = [];
 let navIndex = -1;
 let navigatingHistory = false;
 let isHome = true;
+let suppressFsReloadUntil = 0;
+const lastRunStartedAt = new Map();
 
 const workspace = document.getElementById('workspace');
 const tree = document.getElementById('fileTree');
@@ -20,7 +22,150 @@ const dirtyDot = document.getElementById('dirtyDot');
 const preview = document.getElementById('preview');
 const toastEl = document.getElementById('toast');
 const dialogNote = document.getElementById('newNoteDialog');
+const createItemDialog = document.getElementById('createItemDialog');
+const createItemForm = document.getElementById('createItemForm');
+const createItemType = document.getElementById('createItemType');
+const createItemName = document.getElementById('createItemName');
 const contextMenu = document.getElementById('contextMenu');
+
+// Final Help menu behavior
+const helpMenu=document.getElementById('helpMenu');
+
+if(helpMenu){
+  const summary=helpMenu.querySelector('summary');
+  const popover=helpMenu.querySelector('.help-popover');
+  const newNote=document.getElementById('newNoteBtn');
+  // Keep Help as the final control in the top toolbar.
+  const toolbar=helpMenu.parentElement;
+
+  if(toolbar){
+    toolbar.appendChild(helpMenu);
+  }
+
+  // Copy the ACTUAL toolbar-button appearance.
+  // Use !important inline properties so old experimental
+  // Help CSS cannot override them.
+  if(summary && newNote){
+    const matchToolbarButton=()=>{
+      const s=getComputedStyle(newNote);
+
+      [
+        'font-family',
+        'font-size',
+        'font-weight',
+        'font-style',
+        'line-height',
+        'letter-spacing',
+        'color',
+        'background-color',
+        'border-top-width',
+        'border-right-width',
+        'border-bottom-width',
+        'border-left-width',
+        'border-top-style',
+        'border-right-style',
+        'border-bottom-style',
+        'border-left-style',
+        'border-top-color',
+        'border-right-color',
+        'border-bottom-color',
+        'border-left-color',
+        'border-radius',
+        'padding-top',
+        'padding-right',
+        'padding-bottom',
+        'padding-left',
+        'height',
+        'min-height',
+        'box-shadow'
+      ].forEach(prop=>{
+        summary.style.setProperty(
+          prop,
+          s.getPropertyValue(prop),
+          'important'
+        );
+      });
+
+      summary.style.setProperty('display','inline-flex','important');
+      summary.style.setProperty('align-items','center','important');
+      summary.style.setProperty('justify-content','center','important');
+      summary.style.setProperty('box-sizing','border-box','important');
+      summary.style.setProperty('cursor','pointer','important');
+      summary.style.setProperty('list-style','none','important');
+      summary.style.setProperty('white-space','nowrap','important');
+      summary.style.setProperty('appearance','none','important');
+      summary.style.setProperty('-webkit-appearance','none','important');
+    };
+
+    matchToolbarButton();
+  }
+
+  if(popover){
+    // Enough room that every example stays on one line.
+    popover.style.setProperty('width','700px','important');
+    popover.style.setProperty('max-width','calc(100vw - 40px)','important');
+
+    popover.innerHTML=`
+      <div class="help-section">
+        <strong>Workbench commands</strong>
+        <div><code>wb FILE</code><span>Open file in Workbench</span></div>
+        <div><code>wb .</code><span>Open terminal directory</span></div>
+        <div><code>⌘S</code><span>Save now</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Run from terminal</strong>
+        <div><code>python3 a.py</code><span>Run Python</span></div>
+        <div><code>Rscript a.R</code><span>Run R</span></div>
+        <div><code>bash a.sh</code><span>Run shell script</span></div>
+        <div><code>gcc a.c -o a</code><span>Compile C</span></div>
+        <div><code>g++ a.cpp -o a</code><span>Compile C++</span></div>
+        <div><code>./a</code><span>Run compiled program</span></div>
+        <div><code>root -l -q a.C</code><span>Run ROOT macro</span></div>
+        <div><code>root -l -q 'a.C+'</code><span>Compile ROOT macro with ACLiC</span></div>
+        <div><code>latexmk -pdf a.tex</code><span>Build LaTeX PDF</span></div>
+        <div><code>pdflatex a.tex</code><span>Single LaTeX pass</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Org syntax</strong>
+        <div><code>* Heading</code><span>Heading</span></div>
+        <div><code>* TODO Task</code><span>Task</span></div>
+        <div><code>- [ ] Item</code><span>Checkbox</span></div>
+        <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
+        <div><code>DEADLINE:</code><span>Deadline</span></div>
+        <div><code>[[file:path][Label]]</code><span>File link</span></div>
+      </div>
+    `;
+
+    popover.querySelectorAll('.help-section>div').forEach(row=>{
+      row.style.setProperty(
+        'grid-template-columns',
+        '260px 1fr',
+        'important'
+      );
+    });
+
+    popover.querySelectorAll('code').forEach(code=>{
+      code.style.setProperty('white-space','nowrap','important');
+    });
+  }
+
+  // Clicking anywhere outside closes Help.
+  document.addEventListener('click',e=>{
+    if(helpMenu.open && !helpMenu.contains(e.target)){
+      helpMenu.removeAttribute('open');
+    }
+  });
+
+  // Escape closes Help.
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape' && helpMenu.open){
+      helpMenu.removeAttribute('open');
+    }
+  });
+}
+
 
 const runBtn = document.getElementById('runBtn');
 const buildBtn = document.getElementById('buildBtn');
@@ -73,7 +218,10 @@ function setEditorVisible(show){
 }
 function updateContextActions(){
   const ext=extOf(currentPath);
-  runBtn.hidden=!['.py','.r','.sh','.bash','.zsh'].includes(ext);
+  runBtn.hidden=![
+    '.py','.r','.sh','.bash','.zsh',
+    '.c','.cpp','.cc','.cxx'
+  ].includes(ext);
   buildBtn.hidden=ext!=='.tex';
   runNotebookBtn.hidden=ext!=='.ipynb';
   openDefaultBtn.disabled=!currentPath;
@@ -101,6 +249,16 @@ async function goHistory(delta){
   try{const item=navHistory[navIndex];if(item.type==='home')await showHome(false);else if(item.type==='dir')await loadDir(item.path,false);else await openFile(item.path,false)}
   finally{navigatingHistory=false;updateNavigation()}
 }
+async function syncTerminalToPath(vpath){
+  if(!terminalId || !vpath)return;
+  try{
+    await window.workbench.terminalCwd({
+      id:terminalId,
+      cwdVirtual:vpath
+    });
+  }catch{}
+}
+
 async function loadDir(vpath,record=true){
   isHome=false;
   const data=await window.workbench.listDir(vpath);
@@ -111,16 +269,26 @@ async function loadDir(vpath,record=true){
   if(!/^[^:]+:\/$/.test(currentDir)){
     const up=document.createElement('div');
     up.className='file-row';up.innerHTML='<span class="file-icon">↩</span><span class="file-name">..</span>';
-    up.onclick=()=>loadDir(dirname(currentDir));
+    up.onclick=async()=>{
+      const target=dirname(currentDir);
+      await loadDir(target);
+      await syncTerminalToPath(target);
+    };
     tree.appendChild(up);
   }
   for(const item of data.items){
     const row=document.createElement('div');
     row.className='file-row';row.dataset.path=item.path;
     row.innerHTML=`<span class="file-icon">${item.type==='dir'?'▸':'•'}</span><span class="file-name">${esc(item.name)}</span><button class="file-more">•••</button>`;
-    row.onclick=(e)=>{
+    row.onclick=async(e)=>{
       if(e.target.classList.contains('file-more')) return;
-      item.type==='dir'?loadDir(item.path):openFile(item.path);
+      if(item.type==='dir'){
+        await loadDir(item.path);
+        await syncTerminalToPath(item.path);
+      }else{
+        await openFile(item.path);
+        await syncTerminalToPath(item.path);
+      }
     };
     row.oncontextmenu=(e)=>{e.preventDefault();openContext(item.path)};
     row.querySelector('.file-more').onclick=(e)=>{e.stopPropagation();openContext(item.path)};
@@ -145,23 +313,176 @@ async function openFile(vpath,record=true){
   updateContextActions();
   await refreshPreview();
 }
-async function saveCurrent(){
-  if(!currentPath||editor.readOnly)return true;
-  const result=await window.workbench.saveFile({path:currentPath,content:editor.value,expectedHash:currentHash});
-  if(result.conflict){
-    showToast('File changed outside Workbench. Reload or compare before saving.',true);
+async function buildLatexLive(vpath,quiet=true){
+  suppressFsReloadUntil=Date.now()+5000;
+
+  try{
+    const result=await window.workbench.buildLatex(vpath);
+
+    if(!result.ok){
+      if(!quiet)showToast('LaTeX build failed',true);
+      return false;
+    }
+
+    if(currentPath===vpath){
+      await refreshPreview();
+    }
+
+    return true;
+  }catch(err){
+    if(!quiet)showToast(err.message||String(err),true);
     return false;
   }
-  currentHash=result.sha256;markDirty(false);showToast('Saved');
-  await refreshPreview();
+}
+
+async function saveCurrent(options={}){
+  const quiet=!!options.quiet;
+  const buildLatex=options.buildLatex!==false;
+
+  if(!currentPath||editor.readOnly)return true;
+
+  const savingPath=currentPath;
+
+  suppressFsReloadUntil=Date.now()+1500;
+
+  const result=await window.workbench.saveFile({
+    path:savingPath,
+    content:editor.value,
+    expectedHash:currentHash
+  });
+
+  if(result.conflict){
+    showToast(
+      'File changed outside Workbench. Reload or compare before saving.',
+      true
+    );
+    return false;
+  }
+
+  currentHash=result.sha256;
+  markDirty(false);
+
+  if(!quiet)showToast('Saved');
+
+  // Do not rebuild normal rendered views here.
+  // Rebuilding the iframe was causing scroll-to-top.
+
+  if(
+    buildLatex &&
+    extOf(savingPath)==='.tex'
+  ){
+    await buildLatexLive(savingPath,quiet);
+  }
+
   return true;
 }
+
+let autoSaveTimer=null;
+let previewTimer=null;
+
 editor.addEventListener('input',()=>{
   markDirty(true);
-  if(!['.pdf','.ipynb'].includes(extOf(currentPath))) debouncePreview();
+
+  const ext=extOf(currentPath);
+
+  if(!['.pdf','.ipynb','.tex'].includes(ext)){
+    debouncePreview();
+  }
+
+  clearTimeout(autoSaveTimer);
+
+  autoSaveTimer=setTimeout(async()=>{
+    if(!dirty||!currentPath||editor.readOnly)return;
+
+    const savingPath=currentPath;
+    const savingExt=extOf(savingPath);
+
+    const ok=await saveCurrent({
+      quiet:true,
+      buildLatex:false
+    });
+
+    if(
+      ok &&
+      savingExt==='.tex' &&
+      currentPath===savingPath
+    ){
+      await buildLatexLive(savingPath,true);
+    }
+  },1000);
 });
-let previewTimer=null;
-function debouncePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(refreshPreview,300)}
+
+function debouncePreview(){
+  clearTimeout(previewTimer);
+  previewTimer=setTimeout(refreshPreview,300);
+}
+
+
+// Smart list continuation
+editor.addEventListener('keydown',e=>{
+  if(
+    e.key!=='Enter' ||
+    e.shiftKey ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.altKey
+  )return;
+
+  const ext=extOf(currentPath);
+
+  if(!['.org','.md','.txt'].includes(ext))return;
+
+  const start=editor.selectionStart;
+  const end=editor.selectionEnd;
+
+  if(start!==end)return;
+
+  const before=editor.value.slice(0,start);
+  const lineStart=before.lastIndexOf('\n')+1;
+  const line=before.slice(lineStart);
+
+  let continuation=null;
+  let m;
+
+  m=line.match(/^(\s*)([-+*])\s+\[([ Xx])\]\s+(.*)$/);
+
+  if(m && m[4].trim()){
+    continuation=`\n${m[1]}${m[2]} [ ] `;
+  }
+
+  if(!continuation){
+    m=line.match(/^(\s*)([-+*])\s+(.*)$/);
+
+    if(m && m[3].trim()){
+      continuation=`\n${m[1]}${m[2]} `;
+    }
+  }
+
+  if(!continuation){
+    m=line.match(/^(\s*)(\d+)([.)])\s+(.*)$/);
+
+    if(m && m[4].trim()){
+      continuation=
+        `\n${m[1]}${Number(m[2])+1}${m[3]} `;
+    }
+  }
+
+  if(!continuation)return;
+
+  e.preventDefault();
+
+  editor.setRangeText(
+    continuation,
+    start,
+    end,
+    'end'
+  );
+
+  editor.dispatchEvent(
+    new Event('input',{bubbles:true})
+  );
+});
+
 
 function orgInline(s,current){
   let x=esc(s);
@@ -195,7 +516,7 @@ function renderOrg(text){
     m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l}>${orgInline(m[2])}</h${l}>`);return}
     m=line.match(/^\s*[-+]\s+\[([ Xx])\]\s+(.*)$/);if(m){
       const done=m[1].toLowerCase()==='x';
-      out.push(`<div class="check-row"><button class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}">${orgInline(m[2])}</span></div>`);return;
+      out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}">${orgInline(m[2])}</span></div>`);return;
     }
     m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet">• ${orgInline(m[1])}</div>`);return}
     if(/^\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(line)){out.push(`<div class="timestamp">${esc(line.trim())}</div>`);return}
@@ -238,6 +559,211 @@ function renderNotebook(text){
   out.push('</article>');return out.join('');
 }
 
+
+function agendaVirtualPath(realPath){
+  if(!realPath)return null;
+
+  const orgRoot='/Users/dnorcini/org/';
+  const hopkinsRoot='/Users/dnorcini/Documents/hopkins/';
+
+  if(realPath.startsWith(orgRoot)){
+    return 'org:/' + realPath.slice(orgRoot.length);
+  }
+
+  if(realPath.startsWith(hopkinsRoot)){
+    return 'hopkins:/' + realPath.slice(hopkinsRoot.length);
+  }
+
+  return null;
+}
+
+function renderAgenda(items){
+  let html='';
+
+  for(const item of (items||[])){
+
+    if(item.type==='date'){
+      html+=`
+        <div class="agenda-date">
+          ${esc((item.text||'').trim().replace(/^(Date|Scheduled|Deadline):\s*/,'') )}
+        </div>
+      `;
+      continue;
+    }
+
+    if(item.type==='item'){
+      const vpath=agendaVirtualPath(item.file);
+
+      if(vpath){
+        html+=`
+          <a href="#"
+             class="agenda-item agenda-item-link"
+             data-agenda-path="${esc(vpath)}"
+             data-agenda-line="${Number(item.line||1)}">
+
+            <span>${esc((item.text||'').trim().replace(/^(Date|Scheduled|Deadline):\s*/,'') )}</span>
+            <span class="agenda-arrow">→</span>
+
+          </a>
+        `;
+      }else{
+        html+=`
+          <div class="agenda-item">
+            <span>${esc((item.text||'').trim())}</span>
+          </div>
+        `;
+      }
+    }
+  }
+
+  if(!html){
+    html=`
+      <div class="agenda-empty">
+        Nothing scheduled or due in the next 60 days.
+      </div>
+    `;
+  }
+
+  return `
+    <main class="agenda-page">
+
+      <section class="agenda-hero">
+        <div>
+          <div class="home-kicker">LIVE ORG AGENDA</div>
+          <h1>Upcoming 60 days</h1>
+          <p>
+            Scheduled items and deadlines from master.org and inbox.org.
+            Empty dates are hidden.
+          </p>
+        </div>
+
+        <a href="#" class="agenda-refresh">Refresh</a>
+      </section>
+
+      <section class="agenda-list">
+        ${html}
+      </section>
+
+    </main>
+  `;
+}
+
+
+async function loadHomeAgendaPreview(){
+  try{
+    const items=await window.workbench.getOrgAgenda();
+
+    const upcoming=[];
+    let currentDate='';
+
+    for(const item of (items||[])){
+      if(item.type==='date'){
+        currentDate=(item.text||'').trim();
+        continue;
+      }
+
+      if(item.type==='item'){
+        upcoming.push({
+          ...item,
+          agendaDate:currentDate
+        });
+
+        if(upcoming.length>=3)break;
+      }
+    }
+
+    const doc=preview.contentDocument;
+    if(!doc)return;
+
+    const box=doc.getElementById('homeAgendaPreview');
+    if(!box)return;
+
+    if(!upcoming.length){
+      box.innerHTML=`
+        <div class="home-agenda-label">Upcoming</div>
+        <div class="home-agenda-empty">Nothing scheduled soon.</div>
+      `;
+      return;
+    }
+
+    box.innerHTML=`
+      <div class="home-agenda-label">Upcoming</div>
+
+      ${upcoming.map(item=>`
+        <div class="home-agenda-item">
+          <span class="home-agenda-date">
+            ${esc(item.agendaDate||'')}
+          </span>
+          <span class="home-agenda-text">
+            ${esc((item.text||'').trim())}
+          </span>
+        </div>
+      `).join('')}
+    `;
+  }catch(err){
+    const doc=preview.contentDocument;
+    const box=doc && doc.getElementById('homeAgendaPreview');
+
+    if(box){
+      box.innerHTML=`
+        <div class="home-agenda-label">Upcoming</div>
+        <div class="home-agenda-empty">Agenda unavailable.</div>
+      `;
+    }
+  }
+}
+
+async function showAgenda(){
+  if(!(await maybeAbandon()))return;
+
+  isHome=false;
+  currentPath=null;
+  currentHash=null;
+
+  markDirty(false);
+
+  editor.readOnly=true;
+  editor.value='';
+  editorTitle.textContent='Quick edit';
+
+  setEditorVisible(false);
+
+  document
+    .querySelectorAll('.file-row')
+    .forEach(r=>r.classList.remove('selected'));
+
+  updateContextActions();
+
+  preview.removeAttribute('src');
+
+  preview.srcdoc=previewShell(`
+    <main class="agenda-page">
+      <div class="agenda-loading">
+        Loading live Org agenda…
+      </div>
+    </main>
+  `);
+
+  try{
+    const items=await window.workbench.getOrgAgenda();
+    preview.srcdoc=previewShell(renderAgenda(items));
+  }catch(err){
+    preview.srcdoc=previewShell(`
+      <main class="agenda-page">
+        <div class="agenda-error">
+          <h2>Could not load Agenda</h2>
+          <pre><code>${esc(
+            err && err.message
+              ? err.message
+              : String(err)
+          )}</code></pre>
+        </div>
+      </main>
+    `);
+  }
+}
+
+
 function homeDashboard(){
   const today=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date());
   return `<main class="home-dashboard">
@@ -254,9 +780,19 @@ function homeDashboard(){
       <div class="home-card">
         <div class="home-card-label">Today</div>
         <h2>${esc(today)}</h2>
+
         <a href="#" class="wb-link" data-kind="file" data-path="org:/home.org">Open home.org <span>→</span></a>
         <a href="#" class="wb-link" data-kind="file" data-path="org:/inbox.org">Process Org inbox <span>→</span></a>
         <a href="#" class="wb-link" data-kind="file" data-path="org:/master.org">Open master.org <span>→</span></a>
+
+        <div id="homeAgendaPreview" class="home-agenda-preview">
+          <div class="home-agenda-label">Upcoming</div>
+          <div class="home-agenda-loading">Loading…</div>
+        </div>
+
+        <a href="#" class="agenda-open">
+          View 60-day agenda <span>→</span>
+        </a>
       </div>
 
       <div class="home-card">
@@ -286,8 +822,7 @@ function homeDashboard(){
         </div>
       </div>
     </section>
-
-    <section class="home-card syntax-guide-card">
+<section class="home-card syntax-guide-card">
       <div class="home-card-label">Reference</div>
 
       <details class="syntax-details">
@@ -381,6 +916,10 @@ async function showHome(record=true){
   if(record) recordLocation('home','home'); else updateNavigation();
   preview.removeAttribute('src');
   preview.srcdoc=previewShell(homeDashboard());
+
+  preview.onload=()=>{
+    loadHomeAgendaPreview();
+  };
 }
 
 function previewShell(body){
@@ -390,11 +929,18 @@ function previewShell(body){
   p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
-  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}.nb-output{margin:8px 0 18px;padding-left:16px;border-left:3px solid #d8dee4}.nb-output img{max-width:100%}.nb-error{border-left-color:#cf222e}
+  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}.nb-output{margin:8px 0 18px;padding-left:16px;border-left:3px solid #d8dee4}.nb-output img{max-width:100%}.nb-error{border-left-color:#cf222e}
   .pdf{position:fixed;inset:0;border:0;width:100%;height:100%}.image{max-width:100%;height:auto;display:block;margin:20px auto}
   .home-dashboard{max-width:1080px;margin:0 auto;padding:34px 38px 80px}.home-hero{display:flex;justify-content:space-between;gap:40px;align-items:flex-start;padding:4px 0 28px;border-bottom:1px solid #d8dee4}.home-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;color:#57606a;margin-bottom:8px}.home-hero h1{font-size:34px;border:0;margin:0 0 8px;padding:0}.home-hero p{font-size:16px;line-height:1.55;color:#57606a;max-width:720px;margin:0}.home-badge{font-size:13px;line-height:1.5;color:#57606a;text-align:right;white-space:nowrap;padding-top:4px}.home-badge strong{color:#1f2328}.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.home-card{border:1px solid #d8dee4;border-radius:10px;padding:18px;background:#fff;box-shadow:0 1px 0 rgba(31,35,40,.03)}.home-card-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#656d76}.home-card h2{font-size:18px;border:0;padding:0;margin:5px 0 12px}.wb-link{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-top:1px solid #f0f1f2;font-size:14px}.wb-link:first-of-type{border-top:0}.home-card-note{font-size:13px;color:#656d76;margin-top:8px}.home-chip-row{display:flex;flex-wrap:wrap;gap:7px}.home-chip{display:inline-block;border:1px solid #d0d7de;background:#f6f8fa;border-radius:999px;padding:5px 9px;font-size:12px}.home-shortcuts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.home-shortcuts>div{padding:14px 16px;background:#f6f8fa;border-radius:8px}.home-shortcuts strong{display:block;font-size:13px;margin-bottom:4px}.home-shortcuts span{font-size:12px;color:#656d76;line-height:1.45}@media(max-width:800px){.home-grid,.home-shortcuts{grid-template-columns:1fr}.home-hero{display:block}.home-badge{text-align:left;margin-top:14px}}
 
-  .syntax-guide-card{grid-column:auto}
+
+  .home-agenda-preview{margin-top:14px;padding-top:12px;border-top:1px solid #d8dee4}
+  .home-agenda-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#656d76;margin-bottom:5px}
+  .home-agenda-date{display:block;font-size:10px;font-weight:600;color:#656d76;margin-bottom:1px}.home-agenda-text{display:block}.home-agenda-item{font-size:12px;line-height:1.45;color:#24292f;padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .home-agenda-loading,.home-agenda-empty{font-size:12px;color:#8c959f;padding:3px 0}
+  .agenda-open{display:flex;justify-content:space-between;gap:16px;padding:8px 0;margin-top:4px;border-top:1px solid #f0f1f2;font-size:14px}
+
+  .syntax-guide-card{grid-column:auto;margin-top:16px}
   .syntax-guide{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px;margin-top:4px}
   .syntax-section h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#656d76}
   .syntax-row{display:grid;grid-template-columns:minmax(165px,auto) 1fr;gap:12px;align-items:center;padding:6px 0;border-top:1px solid #f0f1f2;font-size:13px}
@@ -407,7 +953,7 @@ function previewShell(body){
   @media(max-width:800px){.syntax-guide{grid-template-columns:1fr}.syntax-row{grid-template-columns:1fr;gap:3px}.syntax-row code{width:max-content;max-width:100%;white-space:normal}}
 
 
-  .syntax-guide-card{grid-column:auto}
+  .syntax-guide-card{grid-column:auto;margin-top:16px}
   .syntax-guide-card:has(.syntax-details[open]){grid-column:1/-1}
   .syntax-details summary{display:flex;align-items:center;justify-content:space-between;gap:20px;cursor:pointer;list-style:none;margin-top:5px}
   .syntax-details summary::-webkit-details-marker{display:none}
@@ -420,28 +966,266 @@ function previewShell(body){
   .syntax-guide{display:grid;grid-template-columns:1fr 1fr;gap:20px 32px}
   .syntax-extra{margin-top:20px;border-top:1px solid #d8dee4;padding-top:14px}
 
+
+  .agenda-open{display:flex;justify-content:space-between;gap:16px;padding:10px 0 0;margin-top:12px;border-top:1px solid #f0f1f2;font-size:14px}
+
+  .agenda-page{max-width:960px;margin:0 auto;padding:34px 38px 90px}
+  .agenda-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;padding-bottom:24px;border-bottom:1px solid #d8dee4}
+  .agenda-hero h1{font-size:30px;border:0;padding:0;margin:4px 0 7px}
+  .agenda-hero p{font-size:14px;line-height:1.5;color:#57606a;margin:0}
+  .agenda-refresh{border:1px solid #d0d7de;background:#f6f8fa;border-radius:6px;padding:7px 11px;font-size:13px;white-space:nowrap}
+
+  .agenda-list{padding-top:8px}
+  .agenda-date{font-size:15px;font-weight:700;margin:25px 0 6px;padding-bottom:7px;border-bottom:1px solid #d8dee4}
+
+  .agenda-item{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:8px 10px;margin:1px -10px;border-radius:6px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#24292f}
+  .agenda-item-link{text-decoration:none}
+  .agenda-item-link:hover{background:#f6f8fa;text-decoration:none}
+  .agenda-arrow{color:#8c959f}
+
+  .agenda-loading,.agenda-empty{padding:40px 0;color:#656d76}
+  .agenda-error{padding-top:20px}
+
   </style></head><body>${body}<script>
   document.addEventListener('click',e=>{
     const t=e.target.closest('.task-toggle');if(t){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(t.dataset.line),kind:t.dataset.kind},'*');return}
+    const c=e.target.closest('.checkbox-toggle-row');if(c){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(c.dataset.line),kind:'checkbox'},'*');return}
     const w=e.target.closest('a[data-web]');if(w){e.preventDefault();parent.postMessage({type:'openWeb',url:w.dataset.web},'*');return}
     const f=e.target.closest('.org-file-link');if(f){e.preventDefault();parent.postMessage({type:'openOrgLink',target:f.dataset.target},'*');return}
     const p=e.target.closest('.wb-link');if(p){e.preventDefault();parent.postMessage({type:'openWorkbenchPath',path:p.dataset.path,kind:p.dataset.kind},'*');return}
+    const a=e.target.closest('.agenda-open');if(a){e.preventDefault();parent.postMessage({type:'openAgenda'},'*');return}
+    const r=e.target.closest('.agenda-refresh');if(r){e.preventDefault();parent.postMessage({type:'refreshAgenda'},'*');return}
+    const i=e.target.closest('.agenda-item-link');if(i){e.preventDefault();parent.postMessage({type:'openAgendaItem',path:i.dataset.agendaPath,line:Number(i.dataset.agendaLine||1)},'*');return}
   });
   <\/script></body></html>`;
 }
+
+
+function extractExplicitOutputNames(source){
+  const names=new Set();
+
+  const patterns=[
+    // Python:
+    // plt.savefig("plot.png")
+    // fig.savefig("plot.pdf")
+    /(?:savefig|imsave)\s*\(\s*(['"])([^'"]+\.(?:png|pdf|jpg|jpeg))\1/gi,
+
+    // ROOT / C++:
+    // c->SaveAs("plot.pdf")
+    // c->Print("plot.png")
+    /(?:SaveAs|Print)\s*\(\s*(['"])([^'"]+\.(?:png|pdf|jpg|jpeg))\1/gi,
+
+    // R:
+    // ggsave("plot.pdf")
+    // png("plot.png")
+    // pdf("plot.pdf")
+    /(?:ggsave|png|pdf|jpeg|jpg)\s*\(\s*(['"])([^'"]+\.(?:png|pdf|jpg|jpeg))\1/gi
+  ];
+
+  for(const pattern of patterns){
+    let match;
+
+    while((match=pattern.exec(source||''))!==null){
+      const pieces=match[2].split(/[\\/]/);
+      const name=pieces[pieces.length-1];
+
+      if(name)names.add(name);
+    }
+  }
+
+  return [...names];
+}
+
+async function renderRootOutputs(){
+  const explicitNames=
+    extractExplicitOutputNames(editor.value||'');
+
+  const allOutputs=
+    await window.workbench.generatedOutputs({
+      path:currentPath,
+      sinceMs:0
+    });
+
+  let outputs=[];
+
+  if(explicitNames.length){
+    const wanted=new Set(explicitNames);
+
+    outputs=allOutputs.filter(item=>
+      wanted.has(item.name)
+    );
+  }else{
+    // Dynamic filenames cannot be known from the source alone.
+    // Fall back to outputs modified during the latest Workbench run.
+    const sinceMs=
+      lastRunStartedAt.get(currentPath)||0;
+
+    if(sinceMs){
+      outputs=allOutputs.filter(item=>
+        item.mtimeMs>=sinceMs
+      );
+    }
+  }
+
+  if(!outputs.length){
+    return previewShell(`
+      <article class="doc">
+        <h1>Generated outputs</h1>
+        <p>No PDF or image outputs found yet.</p>
+        <p>Run the macro to generate plots.</p>
+      </article>
+    `);
+  }
+
+  const cards=outputs.map((item,index)=>{
+    const name=esc(item.name);
+    const url=esc(item.fileUrl);
+    const newest=index===0
+      ? '<span style="font-size:11px;color:#656d76">Newest</span>'
+      : '';
+
+    if(item.ext==='.pdf'){
+      return `
+        <section style="
+          margin-bottom:28px;
+          border:1px solid #d8dee4;
+          border-radius:8px;
+          overflow:hidden;
+          background:white;
+        ">
+          <div style="
+            padding:10px 14px;
+            background:#f6f8fa;
+            border-bottom:1px solid #d8dee4;
+            display:flex;
+            justify-content:space-between;
+          ">
+            <strong>${name}</strong>
+            ${newest}
+          </div>
+
+          <iframe
+            src="${url}?v=${item.mtimeMs}#view=FitH&navpanes=0&toolbar=0"
+            style="
+              display:block;
+              width:100%;
+              height:720px;
+              border:0;
+            "
+          ></iframe>
+        </section>
+      `;
+    }
+
+    return `
+      <section style="
+        margin-bottom:28px;
+        border:1px solid #d8dee4;
+        border-radius:8px;
+        overflow:hidden;
+        background:white;
+      ">
+        <div style="
+          padding:10px 14px;
+          background:#f6f8fa;
+          border-bottom:1px solid #d8dee4;
+          display:flex;
+          justify-content:space-between;
+        ">
+          <strong>${name}</strong>
+          ${newest}
+        </div>
+
+        <img
+          src="${url}?v=${item.mtimeMs}"
+          alt="${name}"
+          style="
+            display:block;
+            max-width:100%;
+            height:auto;
+            margin:0 auto;
+            padding:16px;
+            box-sizing:border-box;
+          "
+        >
+      </section>
+    `;
+  }).join('');
+
+  return previewShell(`
+    <article class="doc" style="max-width:1100px;margin:0 auto">
+      <h1>Generated outputs</h1>
+      <p style="color:#656d76;margin-bottom:22px">
+        ${outputs.length} generated output${outputs.length===1?'':'s'}
+      </p>
+      ${cards}
+    </article>
+  `);
+}
+
 async function refreshPreview(){
   if(!currentPath){if(isHome){preview.srcdoc=previewShell(homeDashboard())}else{preview.srcdoc=previewShell('<article class="doc"><h1>Norcini Workbench</h1><p>Select a file.</p></article>')}return}
   const ext=extOf(currentPath);
+
+  const isRootMacro=currentPath && currentPath.endsWith('.C');
+  const isPlotProducingCode=
+    isRootMacro ||
+    ['.py','.r','.c','.cpp','.cc','.cxx'].includes(ext);
+
+  if(isPlotProducingCode){
+    try{
+      const explicitNames=
+        extractExplicitOutputNames(editor.value||'');
+
+      const outputs=
+        await window.workbench.generatedOutputs({
+          path:currentPath,
+          sinceMs:0
+        });
+
+      const existingNames=
+        new Set(outputs.map(item=>item.name));
+
+      const hasExplicitOutput=
+        explicitNames.some(name=>
+          existingNames.has(name)
+        );
+
+      const sinceMs=
+        lastRunStartedAt.get(currentPath)||0;
+
+      const hasRecentOutput=
+        !!sinceMs &&
+        outputs.some(item=>
+          item.mtimeMs>=sinceMs
+        );
+
+      // ROOT uses the generated-output pane by default.
+      //
+      // Python, R, C and C++ use it when:
+      // 1. the source explicitly names an existing plot file, or
+      // 2. a recent Workbench run produced a plot with a dynamic name.
+      if(
+        isRootMacro ||
+        hasExplicitOutput ||
+        hasRecentOutput
+      ){
+        preview.removeAttribute('src');
+        preview.srcdoc=await renderRootOutputs();
+        return;
+      }
+    }catch{}
+  }
   const info=await window.workbench.fileInfo(currentPath);
   if(ext==='.pdf'){
     preview.removeAttribute('srcdoc');
-    preview.src=info.fileUrl+'#view=FitH&navpanes=0&toolbar=0';
+    preview.src=info.fileUrl+'?v='+Date.now()+'#view=FitH&navpanes=0&toolbar=0';
     return;
   }
   if(['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)){preview.removeAttribute('src');preview.srcdoc=previewShell(`<article class="doc"><img class="image" src="${info.fileUrl}"></article>`);return}
   if(ext==='.tex' && info.siblingPdf){
     preview.removeAttribute('srcdoc');
-    preview.src=info.siblingPdf+'#view=FitH&navpanes=0&toolbar=0';
+    preview.src=info.siblingPdf+'?v='+Date.now()+'#view=FitH&navpanes=0&toolbar=0';
     return;
   }
   preview.removeAttribute('src');
@@ -459,12 +1243,83 @@ async function refreshPreview(){
 window.addEventListener('message',async e=>{
   if(!e.data)return;
   if(e.data.type==='toggleTask'){
-    const res=await window.workbench.toggleOrgLine({path:currentPath,lineIndex:e.data.line,kind:e.data.kind});
-    editor.value=res.content;currentHash=res.sha256;markDirty(false);await refreshPreview();
-  }else if(e.data.type==='openWeb'){
+    let scrollY=0;
+
+    try{
+      scrollY=preview.contentWindow.scrollY||0;
+    }catch{}
+
+    suppressFsReloadUntil=Date.now()+1000;
+
+    const res=await window.workbench.toggleOrgLine({
+      path:currentPath,
+      lineIndex:e.data.line,
+      kind:e.data.kind
+    });
+
+    editor.value=res.content;
+    currentHash=res.sha256;
+    markDirty(false);
+
+    await refreshPreview();
+
+    const restoreScroll=()=>{
+      try{
+        preview.contentWindow.scrollTo({
+          top:scrollY,
+          left:0,
+          behavior:'instant'
+        });
+      }catch{
+        try{
+          preview.contentWindow.scrollTo(0,scrollY);
+        }catch{}
+      }
+    };
+
+    preview.addEventListener('load',restoreScroll,{once:true});
+    setTimeout(restoreScroll,25);
+}else if(e.data.type==='openWeb'){
     window.workbench.openExternal(e.data.url);
   }else if(e.data.type==='openWorkbenchPath'){
     try{if(e.data.kind==='dir')await loadDir(e.data.path);else await openFile(e.data.path)}catch(err){showToast(err.message,true)}
+  }else if(e.data.type==='openAgenda'){
+    await showAgenda();
+
+  }else if(e.data.type==='refreshAgenda'){
+    await showAgenda();
+
+  }else if(e.data.type==='openAgendaItem'){
+    try{
+      await openFile(e.data.path);
+
+      const line=Math.max(1,Number(e.data.line||1));
+
+      setTimeout(()=>{
+        try{
+          const lines=editor.value.split('\n');
+
+          let offset=0;
+
+          for(let n=0;n<line-1 && n<lines.length;n++){
+            offset+=lines[n].length+1;
+          }
+
+          editor.focus();
+          editor.selectionStart=offset;
+          editor.selectionEnd=offset;
+
+          const lineHeight=20;
+          editor.scrollTop=Math.max(
+            0,
+            (line-4)*lineHeight
+          );
+        }catch{}
+      },75);
+
+    }catch(err){
+      showToast(err.message,true);
+    }
   }else if(e.data.type==='openOrgLink'){
     try{
       const resolved=await window.workbench.resolveOrgLink({currentPath,target:e.data.target});
@@ -553,13 +1408,76 @@ terminalHost.addEventListener('click',()=>term.focus());
 
 window.workbench.onTerminalData(({id,data})=>{if(id===terminalId)term.write(data)});
 window.workbench.onTerminalExit(({id})=>{if(id===terminalId){term.write('\r\n[terminal exited]\r\n');terminalId=null}});
+
+window.workbench.onWorkbenchOpenPath(async ({path,type})=>{
+  try{
+    const rootName=path.split(':/')[0];
+
+    if(type==='dir'){
+      await loadDir(path,false);
+
+      document.querySelectorAll('.root-tab').forEach(btn=>{
+        const btnRoot=(btn.dataset.root||'').split(':/')[0];
+        btn.classList.toggle('active',btnRoot===rootName);
+      });
+
+      return;
+    }
+
+    // Open the requested file first.
+    await openFile(path);
+    setEditorVisible(true);
+
+    // Then force Files to follow the opened file.
+    const parentDir=dirname(path);
+    await loadDir(parentDir,false);
+
+    // Correct root tab.
+    document.querySelectorAll('.root-tab').forEach(btn=>{
+      const target=btn.dataset.root||'';
+
+      let active=false;
+
+      if(target==='hopkins:/teaching/'){
+        active=path.startsWith('hopkins:/teaching/');
+      }else if(target==='hopkins:/'){
+        active=
+          path.startsWith('hopkins:/') &&
+          !path.startsWith('hopkins:/teaching/');
+      }else{
+        active=path.startsWith(target);
+      }
+
+      btn.classList.toggle('active',active);
+    });
+
+    // Highlight the file we opened.
+    document.querySelectorAll('.file-row').forEach(row=>{
+      row.classList.toggle(
+        'selected',
+        row.dataset.path===path
+      );
+    });
+
+  }catch(err){
+    showToast(err.message||String(err),true);
+  }
+});
+
 window.addEventListener('resize',()=>setTimeout(resizeTerminal,50));
 
 async function sendBuildCommand(){
   if(!currentPath)return;
-  if(dirty && !(await saveCurrent()))return;
+
+  const pathBeingRun=currentPath;
+  if(
+    dirty &&
+    !(await saveCurrent({buildLatex:false}))
+  )return;
   try{
     const cmd=await window.workbench.buildCommand(currentPath);
+
+    lastRunStartedAt.set(pathBeingRun, Date.now());
     if(!terminalId)await createTerminal();
     await window.workbench.terminalWrite({id:terminalId,data:cmd+'\r'});
     showToast('Sent to Bash terminal');
@@ -567,45 +1485,104 @@ async function sendBuildCommand(){
 }
 runBtn.onclick=sendBuildCommand;buildBtn.onclick=sendBuildCommand;runNotebookBtn.onclick=sendBuildCommand;
 
-document.getElementById('terminalHereBtn').onclick=async()=>{
-  try{
-    if(!terminalId) await createTerminal();
-    if(!terminalId) return;
-    await window.workbench.terminalCwd({
-      id:terminalId,
-      cwdVirtual:currentPath||currentDir
-    });
-    await window.workbench.terminalWrite({
-      id:terminalId,
-      data:"printf '\\n[Terminal here] '; pwd; printf '\\n'\r"
-    });
-    const host=document.getElementById('terminal');
-    host.setAttribute('tabindex','0');
-    host.focus();
-    term.focus();
-  }catch(err){
-    term.writeln('');
-    term.writeln('[Terminal here failed] '+String(err.message||err));
-    showToast('Terminal here failed',true);
-  }
-};
 document.getElementById('terminalRestartBtn').onclick=createTerminal;
 
 document.getElementById('saveBtn').onclick=saveCurrent;
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveCurrent()}});
 document.getElementById('refreshPreviewBtn').onclick=refreshPreview;
-document.getElementById('refreshFilesBtn').onclick=()=>loadDir(currentDir,false);
 backBtn.onclick=()=>goHistory(-1);
 forwardBtn.onclick=()=>goHistory(1);
 openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
 document.getElementById('toggleEditorBtn').onclick=()=>setEditorVisible(!editorVisible);
 document.getElementById('homeBtn').onclick=()=>showHome();
 document.querySelectorAll('.root-tab').forEach(btn=>btn.onclick=async()=>{
-  document.querySelectorAll('.root-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');await loadDir(btn.dataset.root)
+  document.querySelectorAll('.root-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if(btn.dataset.file){
+    const file=btn.dataset.file;
+    const parent=dirname(file);
+    await loadDir(parent,false);
+    await openFile(file);
+    await syncTerminalToPath(file);
+
+    document.querySelectorAll('.file-row').forEach(row=>{
+      row.classList.toggle('selected',row.dataset.path===file);
+    });
+    return;
+  }
+
+  if(btn.dataset.root){
+    await loadDir(btn.dataset.root);
+    await syncTerminalToPath(btn.dataset.root);
+  }
 });
-document.getElementById('newFolderBtn').onclick=async()=>{
-  const name=prompt('New folder name:');if(!name)return;
-  try{await window.workbench.newFolder({parent:currentDir,name});await loadDir(currentDir)}catch(e){showToast(e.message,true)}
+
+document.getElementById('newFolderBtn').onclick=()=>{
+  createItemType.value='file';
+  createItemName.value='';
+  createItemName.placeholder='notes.org';
+
+  createItemDialog.showModal();
+
+  setTimeout(()=>{
+    createItemName.focus();
+  },0);
+};
+
+document.getElementById('cancelCreateItemBtn').onclick=()=>{
+  createItemDialog.close();
+};
+
+createItemType.onchange=()=>{
+  createItemName.placeholder=
+    createItemType.value==='file'
+      ? 'notes.org'
+      : 'new-folder';
+
+  createItemName.focus();
+};
+
+createItemForm.onsubmit=async e=>{
+  e.preventDefault();
+
+  const type=createItemType.value;
+  const name=createItemName.value.trim();
+
+  if(!name)return;
+
+  try{
+    if(type==='file'){
+      const result=await window.workbench.newFile({
+        parent:currentDir,
+        name
+      });
+
+      createItemDialog.close();
+
+      await loadDir(currentDir,false);
+      await openFile(result.path);
+      setEditorVisible(true);
+
+      showToast(`Created ${name}`);
+    }else{
+      await window.workbench.newFolder({
+        parent:currentDir,
+        name
+      });
+
+      createItemDialog.close();
+
+      await loadDir(currentDir,false);
+
+      showToast(`Created ${name}`);
+    }
+
+    createItemName.value='';
+
+  }catch(err){
+    showToast(err.message,true);
+  }
 };
 
 document.getElementById('newNoteBtn').onclick=()=>{
@@ -626,10 +1603,23 @@ document.getElementById('newNoteForm').onsubmit=async e=>{
 };
 
 window.workbench.onFsChanged(()=>{
-  clearTimeout(fsTimer);fsTimer=setTimeout(async()=>{
-    try{await loadDir(currentDir,false)}catch{}
-    if(currentPath && !dirty){try{await openFile(currentPath,false)}catch{}}
-  },300)
+  clearTimeout(fsTimer);
+
+  fsTimer=setTimeout(async()=>{
+    try{
+      await loadDir(currentDir,false);
+    }catch{}
+
+    if(
+      currentPath &&
+      !dirty &&
+      Date.now()>=suppressFsReloadUntil
+    ){
+      try{
+        await openFile(currentPath,false);
+      }catch{}
+    }
+  },300);
 });
 
 function setupResizers(){

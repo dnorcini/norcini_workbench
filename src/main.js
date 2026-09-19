@@ -13,7 +13,11 @@ const ROOTS = {
   org: path.join(HOME, 'org'),
   hopkins: path.join(HOME, 'Documents', 'hopkins'),
   documents: path.join(HOME, 'Documents'),
-  desktop_inbox: path.join(HOME, 'Desktop', 'inbox')
+  desktop_inbox: path.join(HOME, 'Desktop', 'inbox'),
+
+  // Hidden catch-all root used when the integrated terminal
+  // navigates somewhere outside the normal shortcut roots.
+  local: path.parse(HOME).root
 };
 
 const TEXT_EXTS = new Set([
@@ -129,6 +133,8 @@ function createWindow() {
 
 function startWatchers() {
   for (const [rootName, rootPath] of Object.entries(ROOTS)) {
+    if (rootName === 'local') continue;
+
     try {
       const watcher = fs.watch(rootPath, { recursive: true }, (eventType, filename) => {
         if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -142,6 +148,126 @@ function startWatchers() {
     } catch {}
   }
 }
+
+
+// -----------------------------------------------------------------------------
+// Live Org Agenda
+// -----------------------------------------------------------------------------
+
+ipcMain.handle('org-agenda:get', async () => {
+  const orgFiles = [
+    path.join(process.env.HOME, 'org', 'master.org'),
+    path.join(process.env.HOME, 'org', 'inbox.org')
+  ];
+
+  const startDate = new Date();
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 59);
+
+  const entries = [];
+
+  function dateFromString(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function inWindow(date) {
+    return date >= startDate && date <= endDate;
+  }
+
+  for (const file of orgFiles) {
+    if (!fs.existsSync(file)) continue;
+
+    const content = fs.readFileSync(file, 'utf8');
+    const lines = content.split(/\r?\n/);
+
+    let currentHeading = '';
+    let currentHeadingLine = 1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      const headingMatch =
+        line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAITING|CANCELLED)\s+)?(.*)$/);
+
+      if (headingMatch) {
+        currentHeading = headingMatch[3].trim();
+        currentHeadingLine = i + 1;
+      }
+
+      if (!currentHeading) continue;
+
+      const timestampRegex = /<(\d{4}-\d{2}-\d{2})(?:\s+[^>]*)?>/g;
+
+      let match;
+
+      while ((match = timestampRegex.exec(line)) !== null) {
+        const dateString = match[1];
+        const date = dateFromString(dateString);
+
+        if (!inWindow(date)) continue;
+
+        let kind = 'Scheduled';
+
+        if (/DEADLINE:/.test(line)) {
+          kind = 'Deadline';
+        } else if (/SCHEDULED:/.test(line)) {
+          kind = 'Scheduled';
+        } else {
+          kind = 'Date';
+        }
+
+        entries.push({
+          type: 'item',
+          date: dateString,
+          kind,
+          text: currentHeading,
+          file,
+          line: currentHeadingLine
+        });
+      }
+    }
+  }
+
+  entries.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.text.localeCompare(b.text);
+  });
+
+  const rows = [];
+  let lastDate = null;
+
+  for (const item of entries) {
+    if (item.date !== lastDate) {
+      const d = dateFromString(item.date);
+
+      rows.push({
+        type: 'date',
+        text: new Intl.DateTimeFormat('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(d)
+      });
+
+      lastDate = item.date;
+    }
+
+    rows.push({
+      type: 'item',
+      text: item.text,
+      file: item.file,
+      line: item.line
+    });
+  }
+
+  return rows;
+});
+
+
 
 app.whenReady().then(() => {
   app.setName('Norcini Workbench');
@@ -257,6 +383,45 @@ ipcMain.handle('trash', async (_event, vpath) => {
   return { ok: true };
 });
 
+
+ipcMain.handle('new-file', async (_event, { parent, name }) => {
+  const dir = resolveVirtual(parent);
+
+  const clean = String(name || '').trim();
+
+  if (
+    !clean ||
+    clean.includes('/') ||
+    clean === '.' ||
+    clean === '..'
+  ) {
+    throw new Error('Invalid file name');
+  }
+
+  const dest = path.join(dir, clean);
+
+  if (!isWithin(dest, dir)) {
+    throw new Error('Invalid destination');
+  }
+
+  if (fs.existsSync(dest)) {
+    throw new Error('A file or folder with that name already exists');
+  }
+
+  await fsp.writeFile(dest, '', 'utf8');
+
+  const virt = virtualize(dest);
+
+  if (!virt) {
+    throw new Error('Created file is outside Workbench roots');
+  }
+
+  return {
+    ok: true,
+    path: virt
+  };
+});
+
 ipcMain.handle('new-folder', async (_event, { parent, name }) => {
   const parentAbs = resolveVirtual(parent);
   const clean = String(name || '').trim();
@@ -367,9 +532,78 @@ ipcMain.handle('resolve-org-link', async (_event, { currentPath, target }) => {
   return { path: virt, type: st.isDirectory() ? 'dir' : 'file' };
 });
 
+
+ipcMain.handle('build-latex', async (_event, vpath) => {
+  const abs = resolveVirtual(vpath);
+
+  if (path.extname(abs).toLowerCase() !== '.tex') {
+    throw new Error('Not a LaTeX file');
+  }
+
+  const dir = path.dirname(abs);
+  const name = path.basename(abs);
+
+  const latexmk = findExecutable(['latexmk']);
+  const pdflatex = findExecutable(['pdflatex']);
+
+  let exe;
+  let args;
+
+  if (fs.existsSync(latexmk)) {
+    exe = latexmk;
+    args = [
+      '-pdf',
+      '-interaction=nonstopmode',
+      '-file-line-error',
+      name
+    ];
+  } else if (fs.existsSync(pdflatex)) {
+    exe = pdflatex;
+    args = [
+      '-interaction=nonstopmode',
+      '-file-line-error',
+      name
+    ];
+  } else {
+    throw new Error('No latexmk or pdflatex found');
+  }
+
+  return await new Promise(resolve => {
+    const child = spawn(exe, args, {
+      cwd: dir,
+      env: process.env
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', d => stdout += String(d));
+    child.stderr.on('data', d => stderr += String(d));
+
+    child.on('close', code => {
+      resolve({
+        ok: code === 0,
+        code,
+        stdout,
+        stderr
+      });
+    });
+
+    child.on('error', err => {
+      resolve({
+        ok: false,
+        code: -1,
+        stdout,
+        stderr: String(err)
+      });
+    });
+  });
+});
+
 ipcMain.handle('build-command', async (_event, vpath) => {
   const abs = resolveVirtual(vpath);
-  const ext = path.extname(abs).toLowerCase();
+  const rawExt = path.extname(abs);
+  const ext = rawExt.toLowerCase();
   const dir = path.dirname(abs);
   const name = path.basename(abs);
 
@@ -398,6 +632,47 @@ ipcMain.handle('build-command', async (_event, vpath) => {
     return `cd ${quoteShell(dir)} && /bin/bash ${quoteShell(name)}`;
   }
 
+
+  if (rawExt === '.C') {
+    return `cd ${quoteShell(dir)} && root -l -q ${quoteShell(name)}`;
+  }
+
+  if (ext === '.c') {
+    const compiler = findExecutable(['clang', 'gcc']);
+
+    if (!fs.existsSync(compiler)) {
+      throw new Error('No clang or gcc compiler found');
+    }
+
+    const output = path.join(
+      os.tmpdir(),
+      'norcini-workbench-c-' +
+      crypto.createHash('sha1').update(abs).digest('hex').slice(0, 12)
+    );
+
+    return `cd ${quoteShell(dir)} && ` +
+      `${quoteShell(compiler)} -Wall -Wextra ${quoteShell(name)} -o ${quoteShell(output)} && ` +
+      `${quoteShell(output)}`;
+  }
+
+  if (['.cpp', '.cc', '.cxx'].includes(ext)) {
+    const compiler = findExecutable(['clang++', 'g++']);
+
+    if (!fs.existsSync(compiler)) {
+      throw new Error('No clang++ or g++ compiler found');
+    }
+
+    const output = path.join(
+      os.tmpdir(),
+      'norcini-workbench-cpp-' +
+      crypto.createHash('sha1').update(abs).digest('hex').slice(0, 12)
+    );
+
+    return `cd ${quoteShell(dir)} && ` +
+      `${quoteShell(compiler)} -std=c++17 -Wall -Wextra ${quoteShell(name)} -o ${quoteShell(output)} && ` +
+      `${quoteShell(output)}`;
+  }
+
   if (ext === '.ipynb') {
     const jupyter = findExecutable(['jupyter']);
     return `cd ${quoteShell(dir)} && ${quoteShell(jupyter)} nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=180 ${quoteShell(name)}`;
@@ -406,6 +681,169 @@ ipcMain.handle('build-command', async (_event, vpath) => {
   throw new Error('No run/build action for this file type');
 });
 
+
+
+function ensureWorkbenchBashRc() {
+  const rcPath = path.join(
+    app.getPath('userData'),
+    'workbench-bashrc'
+  );
+
+  const rc = `
+if [ -f "$HOME/.bash_profile" ]; then
+  . "$HOME/.bash_profile"
+elif [ -f "$HOME/.bashrc" ]; then
+  . "$HOME/.bashrc"
+fi
+
+wb() {
+  if [ "$#" -eq 0 ]; then
+    set -- .
+  fi
+
+  local target="$1"
+
+  case "$target" in
+    /*) ;;
+    *) target="$PWD/$target" ;;
+  esac
+
+  printf '\\033]777;workbench-open;%s\\007' "$target"
+}
+
+# Tell Workbench the terminal's current directory after each
+# command, including after cd.
+__wb_previous_prompt_command="$PROMPT_COMMAND"
+
+__wb_prompt_command() {
+  printf '\\033]778;workbench-cwd;%s\\007' "$PWD"
+
+  if [ -n "$__wb_previous_prompt_command" ]; then
+    eval "$__wb_previous_prompt_command"
+  fi
+}
+
+PROMPT_COMMAND=__wb_prompt_command
+`;
+
+  fs.writeFileSync(rcPath, rc, 'utf8');
+  return rcPath;
+}
+
+
+
+ipcMain.handle('generated-outputs', async (_event, payload) => {
+  const vpath =
+    typeof payload === 'string'
+      ? payload
+      : payload.path;
+
+  const sinceMs =
+    payload && typeof payload === 'object'
+      ? Number(payload.sinceMs || 0)
+      : 0;
+
+  const abs = resolveVirtual(vpath);
+  const dir = path.dirname(abs);
+
+  const allowed = new Set([
+    '.pdf',
+    '.png',
+    '.jpg',
+    '.jpeg'
+  ]);
+
+  const entries = await fsp.readdir(dir, {
+    withFileTypes: true
+  });
+
+  const outputs = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!allowed.has(ext)) continue;
+
+    const full = path.join(dir, entry.name);
+
+    try {
+      const st = await fsp.stat(full);
+
+      if (sinceMs && st.mtimeMs < sinceMs) continue;
+
+      const virt = virtualize(full);
+      if (!virt) continue;
+
+      outputs.push({
+        path: virt,
+        name: entry.name,
+        ext,
+        mtimeMs: st.mtimeMs,
+        fileUrl: pathToFileURL(full).href
+      });
+    } catch {}
+  }
+
+  outputs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  return outputs;
+});
+
+ipcMain.handle('latest-generated-output', async (_event, vpath) => {
+  const abs = resolveVirtual(vpath);
+  const dir = path.dirname(abs);
+
+  const allowed = new Set([
+    '.pdf',
+    '.png',
+    '.jpg',
+    '.jpeg'
+  ]);
+
+  const entries = await fsp.readdir(dir, {
+    withFileTypes: true
+  });
+
+  const candidates = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!allowed.has(ext)) continue;
+
+    const full = path.join(dir, entry.name);
+
+    try {
+      const st = await fsp.stat(full);
+
+      candidates.push({
+        full,
+        mtimeMs: st.mtimeMs
+      });
+    } catch {}
+  }
+
+  candidates.sort((a,b) => b.mtimeMs - a.mtimeMs);
+
+  if (!candidates.length) {
+    return { found:false };
+  }
+
+  const newest = candidates[0];
+  const virt = virtualize(newest.full);
+
+  if (!virt) {
+    return { found:false };
+  }
+
+  return {
+    found:true,
+    path:virt,
+    name:path.basename(newest.full)
+  };
+});
 
 ipcMain.handle('terminal-ping', async () => {
   return {
@@ -425,7 +863,14 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
       ...process.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      SHELL: '/bin/bash'
+      SHELL: '/bin/bash',
+      PROMPT_COMMAND:
+        `wb(){ ` +
+        `if [ "$#" -eq 0 ]; then set -- .; fi; ` +
+        `case "$1" in /*) _wb_path="$1" ;; *) _wb_path="$PWD/$1" ;; esac; ` +
+        `printf '\\033]777;workbench-open;%s\\007' "$_wb_path"; ` +
+        `unset _wb_path; }; ` +
+        (process.env.PROMPT_COMMAND || '')
     };
     if (!pty || typeof pty.spawn !== 'function') {
       throw new Error('node-pty did not load correctly');
@@ -433,7 +878,9 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
     if (!fs.existsSync('/bin/bash')) {
       throw new Error('/bin/bash was not found');
     }
-    const term = pty.spawn('/bin/bash', ['-l'], {
+    const bashRc = ensureWorkbenchBashRc();
+
+    const term = pty.spawn('/bin/bash', ['--rcfile', bashRc, '-i'], {
       name: 'xterm-256color',
       cols: cols || 100,
       rows: rows || 30,
@@ -441,11 +888,102 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
       env
     });
     terminals.set(id, term);
+    let terminalOutputBuffer = '';
+
     term.onData(data => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('terminal-data', { id, data });
+      terminalOutputBuffer += data;
+
+      const marker =
+        /\x1b\](777;workbench-open|778;workbench-cwd);([^\x07]*)\x07/g;
+
+      let clean = '';
+      let last = 0;
+      let match;
+
+      while ((match = marker.exec(terminalOutputBuffer)) !== null) {
+        clean += terminalOutputBuffer.slice(last, match.index);
+
+        try {
+          const kind = match[1];
+          const requested = path.resolve(match[2]);
+          const virt = virtualize(requested);
+
+          if (
+            virt &&
+            fs.existsSync(requested) &&
+            mainWindow &&
+            !mainWindow.isDestroyed()
+          ) {
+            const st = fs.statSync(requested);
+
+            if (
+              kind === '778;workbench-cwd' &&
+              st.isDirectory()
+            ) {
+              mainWindow.webContents.send(
+                'workbench-open-path',
+                {
+                  path: virt,
+                  type: 'dir'
+                }
+              );
+            }
+
+            if (kind === '777;workbench-open') {
+              mainWindow.webContents.send(
+                'workbench-open-path',
+                {
+                  path: virt,
+                  type: st.isDirectory() ? 'dir' : 'file'
+                }
+              );
+            }
+          }
+        } catch {}
+
+        last = marker.lastIndex;
+      }
+
+      const remainder =
+        terminalOutputBuffer.slice(last);
+
+      const openPartial =
+        remainder.lastIndexOf(
+          '\x1b]777;workbench-open;'
+        );
+
+      const cwdPartial =
+        remainder.lastIndexOf(
+          '\x1b]778;workbench-cwd;'
+        );
+
+      const partialStart =
+        Math.max(openPartial, cwdPartial);
+
+      if (partialStart >= 0) {
+        clean += remainder.slice(0, partialStart);
+        terminalOutputBuffer =
+          remainder.slice(partialStart);
+      } else {
+        clean += remainder;
+        terminalOutputBuffer = '';
+      }
+
+      if (
+        clean &&
+        mainWindow &&
+        !mainWindow.isDestroyed()
+      ) {
+        mainWindow.webContents.send(
+          'terminal-data',
+          {
+            id,
+            data: clean
+          }
+        );
       }
     });
+
     term.onExit(({ exitCode, signal }) => {
       terminals.delete(id);
       if (mainWindow && !mainWindow.isDestroyed()) {

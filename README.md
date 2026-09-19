@@ -8,6 +8,22 @@
 
 <p align="center">Filesystem + Org + PDFs + LaTeX + notebooks + code + a real Bash terminal.</p>
 
+
+
+## Build and install the Mac app
+
+For the normal local release/install workflow:
+
+    npm run install:mac
+
+This packages Norcini Workbench, installs it at:
+
+    /Applications/Norcini Workbench.app
+
+and launches the installed application.
+
+See `RELEASE.md` for the full packaging, backup, code-signing, and release procedure.
+
 ## Home screen
 
 Workbench now opens to a real **Home** dashboard inside the application. It is not a static marketing image. The Home button returns to the same dashboard at any time.

@@ -10,7 +10,8 @@
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty",
     "pack:mac": "electron-builder --mac --dir",
-    "dist:mac": "electron-builder --mac dmg zip"
+    "dist:mac": "electron-builder --mac dmg zip",
+    "install:mac": "./scripts/install-mac.sh"
   },
   "dependencies": {
     "node-pty": "^1.1.0",
