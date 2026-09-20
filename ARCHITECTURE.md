@@ -4,6 +4,11 @@
 
 The filesystem is canonical for working files. Org is canonical for notes/tasks/navigation. Zotero remains external and canonical for literature. Workbench is a desktop front end, not a database.
 
+The workflow may be relied upon; the implementation must remain replaceable.
+Canonical files and external systems remain usable without Workbench, and
+machine setup can be checked with `scripts/doctor.sh` or the in-app System
+Check.
+
 ## Electron processes
 
 `src/main.js` owns privileged operations: filesystem access, file watching, shell integration, command construction, and PTY creation. `src/preload.js` exposes a narrow IPC bridge with `contextIsolation` enabled and `nodeIntegration` disabled. `src/renderer/` owns the visible workspace.

@@ -16,6 +16,10 @@ npm --version
 xcode-select -p
 ```
 
+The currently tested development environment is Node.js 26.0.0 with npm 11.
+Use `.nvmrc` and `nvm use` when available. `package.json` records the supported
+Node and npm major ranges. Run `./scripts/doctor.sh` for a read-only check.
+
 ## Application dependencies
 
 | Package | Version | Role |

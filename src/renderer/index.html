@@ -70,6 +70,7 @@
             <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
             <div><code>DEADLINE:</code><span>Deadline</span></div>
             <div><code>[[file:path][Label]]</code><span>File link</span></div>
+            <div><a href="#" class="system-check-link">System Check →</a><span>Check this Mac and Workbench setup</span></div>
           </div>
 
           <div class="help-section">
@@ -214,6 +215,15 @@
       <button id="ctxReveal">Reveal in Finder</button>
       <button id="ctxTrash" class="danger">Move to Trash</button>
     </div>
+  </dialog>
+
+  <dialog id="systemCheckDialog" class="system-check-dialog">
+    <form method="dialog" class="dialog-form">
+      <h2>System Check</h2>
+      <p class="dialog-help">Read-only checks for the current Mac, canonical folders, tools, and packaged app.</p>
+      <div id="systemCheckResults" class="system-check-results">Checking…</div>
+      <div class="dialog-actions"><button value="close">Close</button></div>
+    </form>
   </dialog>
 
   <script src="../../node_modules/xterm/lib/xterm.js"></script>

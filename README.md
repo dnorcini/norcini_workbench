@@ -24,6 +24,10 @@ and launches the installed application.
 
 See `RELEASE.md` for the full packaging, backup, code-signing, and release procedure.
 
+For a new Mac, macOS upgrade, or broken installation, follow `RECOVERY.md` and
+run `scripts/doctor.sh`. Canonical files remain in ordinary folders and
+external systems so the app can be rebuilt or replaced.
+
 ## Home screen
 
 Workbench now opens to a real **Home** dashboard inside the application. It is not a static marketing image. The Home button returns to the same dashboard at any time.

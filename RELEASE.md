@@ -12,6 +12,9 @@ This runs `./scripts/install-mac.sh`, builds the macOS app, backs up any existin
 
 and launches it.
 
+For a new machine or a damaged installation, read `RECOVERY.md` first and run
+`./scripts/doctor.sh` before installing.
+
 The previous installed copy is preserved as:
 
     /Applications/Norcini Workbench.app.previous

@@ -7,6 +7,9 @@ npm install
 npm start
 ```
 
+Use Node.js 26.0.0 with npm 11 (`nvm use` reads `.nvmrc`). Run
+`./scripts/doctor.sh` for a read-only machine and dependency report.
+
 Application source lives under `src/`.
 
 - `src/main.js` owns native filesystem, PTY, shell, and packaging-facing behavior.

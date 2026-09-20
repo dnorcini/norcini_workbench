@@ -11,6 +11,9 @@ brew install node
 xcode-select --install
 ```
 
+The current tested environment is Node.js 26.0.0 with npm 11. Use `nvm use`
+from the repository when using nvm.
+
 If the Xcode Command Line Tools are already installed, macOS will say so.
 
 ## 2. Obtain the source
@@ -27,6 +30,8 @@ Clone the Git repository or copy the release source folder to a permanent locati
 cd ~/Documents/tools/norcini_workbench
 npm install
 ```
+
+Run `./scripts/doctor.sh` before packaging to identify missing tools or paths.
 
 The `postinstall` step runs `@electron/rebuild` for `node-pty`. This native rebuild is required for the real Bash PTY.
 

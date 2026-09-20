@@ -38,6 +38,8 @@ const createItemForm = document.getElementById('createItemForm');
 const createItemType = document.getElementById('createItemType');
 const createItemName = document.getElementById('createItemName');
 const contextMenu = document.getElementById('contextMenu');
+const systemCheckDialog = document.getElementById('systemCheckDialog');
+const systemCheckResults = document.getElementById('systemCheckResults');
 
 const helpMenu=document.getElementById('helpMenu');
 
@@ -102,6 +104,7 @@ if(helpMenu){
         <div><code>DEADLINE:</code><span>Deadline</span></div>
         <div><code>[[file:path][Label]]</code><span>File link</span></div>
         <div><a href="#" class="full-org-guide-link">Full Org Syntax Guide →</a><span>Open on Home</span></div>
+        <div><a href="#" class="system-check-link">System Check →</a><span>Check this Mac and Workbench setup</span></div>
       </div>
     `;
 
@@ -124,6 +127,12 @@ if(helpMenu){
         revealGuide();
       };
       setTimeout(revealGuide,100);
+    });
+
+    popover.querySelector('.system-check-link').addEventListener('click',async e=>{
+      e.preventDefault();
+      helpMenu.removeAttribute('open');
+      await showSystemCheck();
     });
 
   }
@@ -635,23 +644,6 @@ function renderNotebook(text){
 }
 
 
-function agendaVirtualPath(realPath){
-  if(!realPath)return null;
-
-  const orgRoot='/Users/dnorcini/org/';
-  const hopkinsRoot='/Users/dnorcini/Documents/hopkins/';
-
-  if(realPath.startsWith(orgRoot)){
-    return 'org:/' + realPath.slice(orgRoot.length);
-  }
-
-  if(realPath.startsWith(hopkinsRoot)){
-    return 'hopkins:/' + realPath.slice(hopkinsRoot.length);
-  }
-
-  return null;
-}
-
 function agendaDisplayText(text){
   return String(text||'')
     .trim()
@@ -675,7 +667,7 @@ function renderAgenda(items){
     }
 
     if(item.type==='item'){
-      const vpath=agendaVirtualPath(item.file);
+      const vpath=item.virtualPath||null;
 
       if(vpath){
         html+=`
@@ -858,6 +850,19 @@ async function showAgenda(){
         </div>
       </main>
     `);
+  }
+}
+
+async function showSystemCheck(){
+  systemCheckDialog.showModal();
+  systemCheckResults.textContent='Checking…';
+  try{
+    const report=await window.workbench.diagnostics();
+    systemCheckResults.innerHTML=report.checks.map(check=>
+      `<div class="system-check-row"><strong class="system-check-status ${esc(check.status)}">${esc(check.status.toUpperCase())}</strong><span>${esc(check.label)}</span><code>${esc(check.detail)}</code></div>`
+    ).join('');
+  }catch(err){
+    systemCheckResults.innerHTML=`<div class="system-check-row"><strong class="system-check-status broken">BROKEN</strong><span>Diagnostics</span><code>${esc(err.message||String(err))}</code></div>`;
   }
 }
 

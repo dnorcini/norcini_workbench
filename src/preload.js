@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('workbench', {
   getOrgAgenda: () => ipcRenderer.invoke('org-agenda:get'),
+  diagnostics: () => ipcRenderer.invoke('diagnostics:get'),
   roots: () => ipcRenderer.invoke('roots'),
   parentDirectory: (p) => ipcRenderer.invoke('files:parent', p),
   homeDirectory: () => ipcRenderer.invoke('files:home'),

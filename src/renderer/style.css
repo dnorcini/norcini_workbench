@@ -36,6 +36,12 @@ dialog{border:1px solid var(--border);border-radius:10px;box-shadow:0 18px 60px 
 .dialog-form input:focus-visible,.dialog-form select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .dialog-form .dialog-actions{gap:8px;margin-top:2px;padding-top:16px;border-top:1px solid var(--border-subtle)}
 .dialog-form .dialog-actions button{min-width:82px}
+.system-check-dialog{width:min(760px,calc(100vw - 48px));max-width:760px}
+.system-check-results{display:grid;gap:6px;max-height:60vh;overflow:auto}
+.system-check-row{display:grid;grid-template-columns:76px 170px minmax(0,1fr);gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:12px}
+.system-check-row code{overflow-wrap:anywhere;color:var(--muted);font:12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.system-check-status{font-size:11px;letter-spacing:.04em}
+.system-check-status.ok{color:#1a7f37}.system-check-status.warning{color:#9a6700}.system-check-status.missing,.system-check-status.broken{color:#cf222e}
 .dialog-help{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
 .dialog-error{margin:0;color:var(--danger);font-size:12px}
 #homeSettingsDialog{width:min(850px,calc(100vw - 32px));max-height:calc(100vh - 64px);padding:0}

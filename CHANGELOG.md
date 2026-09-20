@@ -6,6 +6,8 @@
 - Added configurable Home cards, recent Org notes, independent Workbench instances, and Files navigation to the parent folder or macOS home folder.
 - Added rendered Org and Markdown editing experiments with autosave, source synchronization, list handling, and conflict protection.
 - Added Markdown and Org syntax reference material, keyboard shortcut documentation, and packaged-app verification.
+- Added read-only portability diagnostics, `scripts/doctor.sh`, and the recovery workflow for new Macs and rebuilds.
+- Recorded the tested Node.js 26 and npm 11 environment without upgrading application dependencies.
 - The 0.9.0 work remains in development and is not yet a frozen release baseline.
 
 ## 0.8.3 final baseline

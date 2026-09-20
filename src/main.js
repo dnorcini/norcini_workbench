@@ -233,8 +233,8 @@ function startWatchers() {
 
 ipcMain.handle('org-agenda:get', async () => {
   const orgFiles = [
-    path.join(process.env.HOME, 'org', 'master.org'),
-    path.join(process.env.HOME, 'org', 'inbox.org')
+    path.join(ROOTS.org, 'master.org'),
+    path.join(ROOTS.org, 'inbox.org')
   ];
 
   const startDate = new Date();
@@ -302,6 +302,7 @@ ipcMain.handle('org-agenda:get', async () => {
           kind,
           text: currentHeading,
           file,
+          virtualPath: virtualize(file),
           line: currentHeadingLine
         });
       }
@@ -382,6 +383,60 @@ app.on('window-all-closed', () => {
 ipcMain.handle('roots', async () =>
   Object.entries(ROOTS).map(([name, abs]) => ({ name, abs }))
 );
+
+function diagnosticCommand(command, args = ['--version']) {
+  const result = spawnSync(command, args, { encoding: 'utf8' });
+  if (result.error) return { status: 'missing', detail: result.error.code || result.error.message };
+  if (result.status !== 0) return { status: 'broken', detail: (result.stderr || result.stdout || '').trim().split(/\r?\n/)[0] || `exit ${result.status}` };
+  return { status: 'ok', detail: (result.stdout || result.stderr || '').trim().split(/\r?\n/)[0] || 'available' };
+}
+
+function diagnosticPath(label, target, required = true, writable = false) {
+  try {
+    const stat = fs.statSync(target);
+    fs.accessSync(target, writable ? fs.constants.R_OK | fs.constants.W_OK : fs.constants.R_OK);
+    return { label, status: 'ok', detail: `${target}${stat.isDirectory() ? (writable ? ' (read/write directory)' : ' (directory)') : ''}` };
+  } catch (err) {
+    const absent = err.code === 'ENOENT' || err.code === 'ENOTDIR';
+    return { label, status: absent ? (required ? 'missing' : 'warning') : 'broken', detail: `${target} (${err.code || 'not readable/writable'})` };
+  }
+}
+
+ipcMain.handle('diagnostics:get', async () => {
+  const checks = [];
+  const add = (label, result) => checks.push({ label, ...result });
+  add('macOS', diagnosticCommand('/usr/bin/sw_vers', ['-productVersion']));
+  add('CPU architecture', { status: 'ok', detail: `${process.arch} (${os.arch()})` });
+  add('Node.js', { status: 'ok', detail: process.version });
+  add('Electron', { status: 'ok', detail: process.versions.electron });
+  add('npm', diagnosticCommand('npm'));
+  add('Git', diagnosticCommand('git'));
+  add('Bash', diagnosticCommand('/bin/bash'));
+  add('Repository', diagnosticPath('Repository', path.resolve(__dirname, '..')));
+  add('Org root', diagnosticPath('Org root', ROOTS.org, true, true));
+  add('Hopkins root', diagnosticPath('Hopkins root', ROOTS.hopkins, true, true));
+  add('Teaching root', diagnosticPath('Teaching root', path.join(ROOTS.hopkins, 'teaching'), false, true));
+  add('Python', diagnosticCommand('python3'));
+  add('R', diagnosticCommand('Rscript'));
+  add('ROOT', diagnosticCommand(findExecutable(['root-config']) || 'root-config', ['--version']));
+  add('latexmk', diagnosticCommand(findExecutable(['latexmk']) || 'latexmk'));
+  add('pdflatex', diagnosticCommand(findExecutable(['pdflatex']) || 'pdflatex'));
+  add('Zotero data', diagnosticPath('Zotero data', path.join(HOME, 'Zotero'), false, false));
+  add('Zotero application', diagnosticPath('Zotero application', '/Applications/Zotero.app', false, false));
+  add('Packaged app', diagnosticPath('Packaged app', '/Applications/Norcini Workbench.app', false, false));
+  add('node_modules', diagnosticPath('node_modules', path.join(__dirname, '..', 'node_modules'), true, true));
+  add('Electron dependency', diagnosticPath('Electron dependency', path.join(__dirname, '..', 'node_modules', 'electron', 'package.json')));
+  add('node-pty native module', diagnosticPath('node-pty native module', path.join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', 'pty.node')));
+  add('package lock', diagnosticPath('package lock', path.join(__dirname, '..', 'package-lock.json')));
+  let canonicalAccess = { status: 'broken', detail: 'Org root is not readable and writable' };
+  try {
+    fs.accessSync(ROOTS.org, fs.constants.R_OK | fs.constants.W_OK);
+    fs.accessSync(ROOTS.hopkins, fs.constants.R_OK | fs.constants.W_OK);
+    canonicalAccess = { status: 'ok', detail: 'Org and project roots are readable and writable' };
+  } catch {}
+  add('Canonical data access', canonicalAccess);
+  return { generatedAt: new Date().toISOString(), checks };
+});
 
 ipcMain.handle('files:parent', async (_event, vpath) => {
   const abs = resolveVirtual(vpath);
