@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 in development
+
+- Polished the Home dashboard, Help menu, Create dialog, generated-output gallery, and notebook rendering.
+- Added configurable Home cards, recent Org notes, independent Workbench instances, and Files navigation to the parent folder or macOS home folder.
+- Added rendered Org and Markdown editing experiments with autosave, source synchronization, list handling, and conflict protection.
+- Added Markdown and Org syntax reference material, keyboard shortcut documentation, and packaged-app verification.
+- The 0.9.0 work remains in development and is not yet a frozen release baseline.
+
 ## 0.8.3 final baseline
 
 - Added file and folder creation, autosave, smart list continuation, and LaTeX live save/build/PDF refresh.

@@ -2,6 +2,7 @@ let currentPath = null;
 let currentDir = 'org:/';
 let currentHash = null;
 let dirty = false;
+let editRevision = 0;
 let editorVisible = false;
 let contextTarget = null;
 let terminalId = null;
@@ -13,6 +14,7 @@ let isHome = true;
 let homeShortcuts = {hero:{},cards:[]};
 let homeShortcutsHash = null;
 let inlineRenderId = 0;
+let helpReturnNavIndex = null;
 let suppressFsReloadUntil = 0;
 const lastRunStartedAt = new Map();
 
@@ -47,15 +49,34 @@ if(helpMenu){
         <strong>Workbench commands</strong>
         <div><code>wb FILE</code><span>Open file in Workbench</span></div>
         <div><code>wb .</code><span>Open terminal directory</span></div>
+        <div><code>open -n -a "Norcini Workbench"</code><span>Open an independent instance</span></div>
       </div>
 
       <div class="help-section">
         <strong>Keyboard Shortcuts</strong>
         <div><code>⌘S / Ctrl-S</code><span>Save current file</span></div>
-        <div><code>Tab</code><span>Complete a command in the terminal</span></div>
-        <div><code>↑ / ↓</code><span>Browse terminal command history</span></div>
-        <div><code>Ctrl-C</code><span>Interrupt a terminal command</span></div>
         <div><code>Esc</code><span>Close Help</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Rendered Org / Markdown</strong>
+        <div><code>Enter</code><span>Split the current rendered block</span></div>
+        <div><code>Backspace / Delete</code><span>Join adjacent blocks at their boundaries</span></div>
+        <div><code>⌘S / Ctrl-S</code><span>Save rendered edits</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Quick Edit</strong>
+        <div><code>Enter</code><span>Continue a non-empty bullet, checkbox, or numbered list</span></div>
+        <div><code>Enter on empty item</code><span>Exit the list</span></div>
+      </div>
+
+      <div class="help-section">
+        <strong>Terminal Bash</strong>
+        <div><code>Tab</code><span>Shell completion</span></div>
+        <div><code>↑ / ↓</code><span>Shell command history</span></div>
+        <div><code>Ctrl-C</code><span>Interrupt the current command</span></div>
+        <div><code>Ctrl-D</code><span>Send EOF or exit a shell</span></div>
       </div>
 
       <div class="help-section">
@@ -87,17 +108,22 @@ if(helpMenu){
     popover.querySelector('.full-org-guide-link').addEventListener('click',async e=>{
       e.preventDefault();
       helpMenu.removeAttribute('open');
+      helpReturnNavIndex=navIndex;
       await showHome();
       if(!isHome) return;
-      const onHomeLoad=preview.onload;
-      preview.onload=event=>{
-        onHomeLoad?.(event);
+      const revealGuide=()=>{
         const guide=preview.contentDocument?.querySelector('.syntax-details');
         if(guide){
           guide.open=true;
           guide.scrollIntoView({block:'start'});
         }
       };
+      const onHomeLoad=preview.onload;
+      preview.onload=event=>{
+        onHomeLoad?.(event);
+        revealGuide();
+      };
+      setTimeout(revealGuide,100);
     });
 
   }
@@ -159,6 +185,7 @@ function extOf(v){
   return i>=0?n.slice(i).toLowerCase():'';
 }
 function markDirty(value){
+  if(value)editRevision++;
   dirty=value; dirtyDot.hidden=!dirty;
 }
 function setEditorVisible(show){
@@ -197,7 +224,7 @@ async function goHistory(delta){
   const next=navIndex+delta;if(next<0||next>=navHistory.length)return;
   if(!(await maybeAbandon()))return;
   navigatingHistory=true;navIndex=next;
-  try{const item=navHistory[navIndex];if(item.type==='home')await showHome(false);else if(item.type==='dir')await loadDir(item.path,false);else await openFile(item.path,false)}
+  try{const item=navHistory[navIndex];if(item.type==='home')await showHome(false,true);else if(item.type==='dir')await loadDir(item.path,false,false,true);else await openFile(item.path,false,true)}
   finally{navigatingHistory=false;updateNavigation()}
 }
 async function syncTerminalToPath(vpath){
@@ -210,9 +237,21 @@ async function syncTerminalToPath(vpath){
   }catch{}
 }
 
-async function loadDir(vpath,record=true,preserveView=false){
+async function loadDir(vpath,record=true,preserveView=false,skipAbandon=false){
+  if(!preserveView&&!skipAbandon&&!(await maybeAbandon()))return;
   const data=await window.workbench.listDir(vpath);
-  if(!preserveView)isHome=false;
+  if(!preserveView){
+    isHome=false;
+    currentPath=null;
+    currentHash=null;
+    markDirty(false);
+    editor.value='';
+    editorTitle.textContent='Quick edit';
+    editor.readOnly=true;
+    setEditorVisible(false);
+    updateContextActions();
+    document.querySelectorAll('.file-row').forEach(r=>r.classList.remove('selected'));
+  }
   currentDir=data.path.endsWith('/')?data.path:data.path+'/';
   if(record) recordLocation('dir',currentDir); else updateNavigation();
   breadcrumbs.textContent=currentDir;
@@ -254,9 +293,9 @@ async function maybeAbandon(){
   if(!dirty)return true;
   return confirm('You have unsaved changes. Discard them?');
 }
-async function openFile(vpath,record=true){
+async function openFile(vpath,record=true,skipAbandon=false){
   const switching=currentPath!==vpath;
-  if(switching && !(await maybeAbandon()))return;
+  if(switching&&!skipAbandon&&!(await maybeAbandon()))return;
   const data=await window.workbench.readFile(vpath);
   isHome=false;
   currentPath=vpath;currentHash=data.sha256;markDirty(false);
@@ -265,6 +304,10 @@ async function openFile(vpath,record=true){
   editorTitle.textContent=vpath;
   editor.readOnly=data.binary;
   editor.value=data.binary?'(Binary file: use rendered view)':''+data.content;
+  editor.scrollTop=0;
+  editor.scrollLeft=0;
+  editor.selectionStart=0;
+  editor.selectionEnd=0;
   currentDir=dirname(vpath);
   updateContextActions();
   if(switching){
@@ -297,20 +340,22 @@ async function buildLatexLive(vpath,quiet=true){
   }
 }
 
-async function saveCurrent(options={}){
+let saveQueue=Promise.resolve();
+async function saveCurrentNow(options={},request){
   const quiet=!!options.quiet;
   const buildLatex=options.buildLatex!==false;
 
-  if(!currentPath||editor.readOnly)return true;
+  if(!request?.path||request.readOnly)return true;
 
-  const savingPath=currentPath;
+  const savingPath=request.path;
+  const savingRevision=request.revision;
 
-  suppressFsReloadUntil=Date.now()+1500;
+  suppressFsReloadUntil=Date.now()+5000;
 
   const result=await window.workbench.saveFile({
     path:savingPath,
-    content:editor.value,
-    expectedHash:currentHash
+    content:request.content,
+    expectedHash:currentPath===savingPath?currentHash:request.expectedHash
   });
 
   if(result.conflict){
@@ -321,8 +366,8 @@ async function saveCurrent(options={}){
     return false;
   }
 
-  currentHash=result.sha256;
-  markDirty(false);
+  if(currentPath===savingPath)currentHash=result.sha256;
+  if(currentPath===savingPath&&editRevision===savingRevision)markDirty(false);
 
   if(!quiet)showToast('Saved');
 
@@ -337,6 +382,22 @@ async function saveCurrent(options={}){
   }
 
   return true;
+}
+function saveCurrent(options={}){
+  const request={
+    path:currentPath,
+    content:editor.value,
+    expectedHash:currentHash,
+    revision:editRevision,
+    readOnly:editor.readOnly
+  };
+  if(!request.path||request.readOnly)return Promise.resolve(true);
+  const run=saveQueue.then(
+    ()=>saveCurrentNow(options,request),
+    ()=>saveCurrentNow(options,request)
+  );
+  saveQueue=run.catch(()=>{});
+  return run;
 }
 
 let autoSaveTimer=null;
@@ -412,12 +473,25 @@ editor.addEventListener('keydown',e=>{
     continuation=`\n${m[1]}${m[2]} [ ] `;
   }
 
-  if(!continuation){
-    m=line.match(/^(\s*)([-+*])\s+(.*)$/);
+  if(m && !m[4].trim()){
+    e.preventDefault();
+    editor.setRangeText('',lineStart,start,'end');
+    editor.dispatchEvent(new Event('input',{bubbles:true}));
+    return;
+  }
 
-    if(m && m[3].trim()){
-      continuation=`\n${m[1]}${m[2]} `;
-    }
+    if(!continuation){
+      m=line.match(/^(\s*)([-+*])\s+(.*)$/);
+
+      if(m && m[3].trim()){
+        continuation=`\n${m[1]}${m[2]} `;
+      }
+      if(m && !m[3].trim()){
+        e.preventDefault();
+        editor.setRangeText('',lineStart,start,'end');
+        editor.dispatchEvent(new Event('input',{bubbles:true}));
+        return;
+      }
   }
 
   if(!continuation){
@@ -458,30 +532,39 @@ function orgInline(s,current){
   x=x.replace(/~([^~\n]+)~/g,'<code>$1</code>');
   return x;
 }
-function inlineEditAttrs(line){return `data-inline-line="${line}" data-inline-render="${inlineRenderId}" contenteditable="true" spellcheck="true"`}
+function inlineEditAttrs(line){return `data-inline-line="${line}" data-inline-render="${inlineRenderId}"`}
+function markdownInline(s){
+  let x=esc(s);
+  x=x.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  x=x.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  x=x.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g,'<em>$1</em>');
+  x=x.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g,'<em>$1</em>');
+  return x;
+}
 function renderOrg(text){
-  const lines=text.split(/\r?\n/);const out=['<article class="doc">'];let inSrc=false,src=[],lang='';
+  const lines=text.split(/\r?\n/);const out=['<article class="doc" contenteditable="true" spellcheck="true">'];let inSrc=false,src=[],lang='';
   lines.forEach((line,i)=>{
     if(inSrc){
-      if(/^\s*#\+end_src/i.test(line)){out.push(`<pre><code>${esc(src.join('\n'))}</code></pre>`);inSrc=false;src=[];return}
+      if(/^\s*#\+end_src/i.test(line)){out.push(`<pre contenteditable="false"><code>${esc(src.join('\n'))}</code></pre>`);inSrc=false;src=[];return}
       src.push(line);return;
     }
     let m=line.match(/^\s*#\+begin_src\s*([A-Za-z0-9_+-]*)/i);
     if(m){inSrc=true;lang=m[1]||'';return}
     m=line.match(/^#\+TITLE:\s*(.*)$/i);if(m){out.push(`<h1 ${inlineEditAttrs(i)}>${orgInline(m[1])}</h1>`);return}
     if(/^#\+/.test(line))return;
+    if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^(\*+)\s+(TODO|DONE)\s+(.*)$/);
     if(m){
       const done=m[2]==='DONE';
-      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3])}</span></div>`);
+      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button contenteditable="false" class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span contenteditable="false" class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3])}</span></div>`);
       return;
     }
     m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l} ${inlineEditAttrs(i)}>${orgInline(m[2])}</h${l}>`);return}
     m=line.match(/^\s*[-+]\s+\[([ Xx])\]\s+(.*)$/);if(m){
       const done=m[1].toLowerCase()==='x';
-      out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[2])}</span></div>`);return;
+      out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button contenteditable="false" type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[2])}</span></div>`);return;
     }
-    m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet">• <span ${inlineEditAttrs(i)}>${orgInline(m[1])}</span></div>`);return}
+    m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet"><span ${inlineEditAttrs(i)}>${orgInline(m[1])}</span></div>`);return}
     if(/^\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(line)){out.push(`<div class="timestamp" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     if(!line.trim()){out.push(`<div class="spacer inline-blank" ${inlineEditAttrs(i)}></div>`);return}
     out.push(`<p ${inlineEditAttrs(i)}>${orgInline(line)}</p>`);
@@ -489,14 +572,15 @@ function renderOrg(text){
   out.push('</article>');return out.join('\n');
 }
 function renderMarkdown(text,editable=false){
-  const out=['<article class="doc">'];let code=false,buf=[];
+  const out=[`<article class="doc"${editable?' contenteditable="true" spellcheck="true"':''}>`];let code=false,buf=[];
   text.split(/\r?\n/).forEach((line,i)=>{
     const attrs=editable?inlineEditAttrs(i):'';
-    if(line.startsWith('```')){if(code){out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);buf=[]}code=!code;return}
+    if(line.startsWith('```')){if(code){out.push(`<pre contenteditable="false"><code>${esc(buf.join('\n'))}</code></pre>`);buf=[]}code=!code;return}
     if(code){buf.push(line);return}
-    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${esc(m[2])}</h${m[1].length}>`);return}
-    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet">• <span ${attrs}>${esc(line.replace(/^\s*[-*+]\s+/,''))}</span></div>`);return}
-    out.push(line.trim()?`<p ${attrs}>${esc(line)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
+    if(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)){out.push(`<div class="rule-line" ${attrs}>${esc(line.trim())}</div>`);return}
+    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${markdownInline(m[2])}</h${m[1].length}>`);return}
+    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet"><span ${attrs}>${markdownInline(line.replace(/^\s*[-*+]\s+/,''))}</span></div>`);return}
+    out.push(line.trim()?`<p ${attrs}>${markdownInline(line)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
   });
   out.push('</article>');return out.join('\n');
 }
@@ -568,6 +652,14 @@ function agendaVirtualPath(realPath){
   return null;
 }
 
+function agendaDisplayText(text){
+  return String(text||'')
+    .trim()
+    .replace(/\s+(?:SCHEDULED|DEADLINE):\s*<[^>]+>\s*$/i,'')
+    .replace(/\s+<\d{4}-\d{2}-\d{2}(?:\s+[^>]*)?>\s*$/,'')
+    .trim();
+}
+
 function renderAgenda(items){
   let html='';
 
@@ -592,7 +684,7 @@ function renderAgenda(items){
              data-agenda-path="${esc(vpath)}"
              data-agenda-line="${Number(item.line||1)}">
 
-            <span>${esc((item.text||'').trim().replace(/^(Date|Scheduled|Deadline):\s*/,'') )}</span>
+            <span>${esc(agendaDisplayText(item.text))}</span>
             <span class="agenda-arrow">→</span>
 
           </a>
@@ -600,7 +692,7 @@ function renderAgenda(items){
       }else{
         html+=`
           <div class="agenda-item">
-            <span>${esc((item.text||'').trim())}</span>
+            <span>${esc(agendaDisplayText(item.text))}</span>
           </div>
         `;
       }
@@ -686,7 +778,7 @@ async function loadHomeAgendaPreview(){
             ${esc(item.agendaDate||'')}
           </span>
           <span class="home-agenda-text">
-            ${esc((item.text||'').trim())}
+            ${esc(agendaDisplayText(item.text))}
           </span>
         </div>
       `).join('')}
@@ -900,8 +992,8 @@ function homeDashboard(){
       <details class="syntax-details">
         <summary>
           <span>
-            <strong>Org Syntax Guide</strong>
-            <small>Headings, tasks, links, formatting, dates, LaTeX, and code blocks.</small>
+            <strong>Org and Markdown Syntax Guide</strong>
+            <small>Supported Org and Markdown syntax, plus the current rendering behavior.</small>
           </span>
           <span class="syntax-expand">Open guide →</span>
         </summary>
@@ -914,6 +1006,8 @@ function homeDashboard(){
             <div class="syntax-row"><code>** Subheading</code><span>Subheading</span></div>
             <div class="syntax-row"><code>- item</code><span>Bullet</span></div>
             <div class="syntax-row"><code>- [ ] item</code><span>Checkbox</span></div>
+            <div class="syntax-row"><code>---</code><span>Horizontal rule</span></div>
+            <div class="syntax-row"><code>1. item</code><span>Numbered list source; Quick Edit continues it</span></div>
           </div>
 
           <div class="syntax-section">
@@ -927,23 +1021,47 @@ function homeDashboard(){
           <div class="syntax-section">
             <h3>Formatting</h3>
             <div class="syntax-row"><code>*bold*</code><span>Bold</span></div>
-            <div class="syntax-row"><code>/italic/</code><span>Italic</span></div>
+            <div class="syntax-row"><code>/italic/</code><span>Org source syntax; not specially rendered yet</span></div>
             <div class="syntax-row"><code>~code~</code><span>Inline code</span></div>
-            <div class="syntax-row"><code>\\( E = mc^2 \\)</code><span>Inline LaTeX</span></div>
+            <div class="syntax-row"><code>\\( E = mc^2 \\)</code><span>Inline LaTeX source; preserved in rendered text</span></div>
           </div>
 
           <div class="syntax-section">
             <h3>Links</h3>
             <div class="syntax-row"><code>[[file:notes.org][Notes]]</code><span>File link</span></div>
-            <div class="syntax-row"><code>[[My heading]]</code><span>Internal link</span></div>
+            <div class="syntax-row"><code>[[My heading]]</code><span>Internal link source; label preserved</span></div>
             <div class="syntax-row"><code>[[https://example.com][Site]]</code><span>Web link</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Markdown</h3>
+            <div class="syntax-row"><code># Heading</code><span>Heading</span></div>
+            <div class="syntax-row"><code>- item</code><span>Bullet</span></div>
+            <div class="syntax-row"><code>**bold**</code><span>Bold</span></div>
+            <div class="syntax-row"><code>*italic*</code><span>Italic</span></div>
+            <div class="syntax-row"><code>\`code\`</code><span>Inline code</span></div>
+            <div class="syntax-row"><code>[Site](https://example.com)</code><span>Web link</span></div>
+            <div class="syntax-row"><code>---</code><span>Horizontal rule</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Agenda fields</h3>
+            <div class="syntax-row"><code>&lt;2026-09-21 Mon&gt;</code><span>Timestamp recognized by the agenda</span></div>
+            <div class="syntax-row"><code>SCHEDULED: &lt;...&gt;</code><span>Scheduled agenda item</span></div>
+            <div class="syntax-row"><code>DEADLINE: &lt;...&gt;</code><span>Deadline agenda item</span></div>
+            <div class="syntax-row"><code>master.org / inbox.org</code><span>Files scanned by the live agenda</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>Tables and source blocks</h3>
+            <div class="syntax-row"><code>| Name | Value |</code><span>Org table source is preserved; table layout is not rendered yet</span></div>
+            <div class="syntax-row"><code>#+begin_src python</code><span>Source block rendered as read-only code</span></div>
           </div>
 
         </div>
 
         <div class="syntax-extra">
           <div class="syntax-row"><code>&lt;2026-09-21 Mon&gt;</code><span>Active date</span></div>
-          <div class="syntax-row"><code>1. item</code><span>Numbered list</span></div>
           <div class="syntax-row"><code>\\[ E = mc^2 \\]</code><span>Display LaTeX</span></div>
 
           <pre class="syntax-code"><code>#+begin_src python
@@ -973,8 +1091,8 @@ print("hello")
 </main>`;
 }
 
-async function showHome(record=true){
-  if(!(await maybeAbandon())) return;
+async function showHome(record=true,skipAbandon=false){
+  if(!skipAbandon&&!(await maybeAbandon())) return;
   try{
     const result=await window.workbench.homeShortcuts();
     homeShortcuts=result.config;
@@ -1004,13 +1122,12 @@ async function showHome(record=true){
 function previewShell(body){
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   body{margin:0;background:#fff;color:#1f2328;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
-  [data-inline-line]{cursor:text;min-width:4px}
-  [data-inline-line]:hover{background:#f6f8fa}
-  [data-inline-line]:focus{outline:2px solid #54aeff;outline-offset:2px;border-radius:3px;background:#fff}
+  [data-inline-line]{cursor:text;min-width:4px;outline:none;caret-color:#0969da}
+  [data-inline-line]:hover,[data-inline-line]:focus{background:transparent}
   .inline-blank{height:12px;min-height:12px}
   .inline-blank:focus{height:20px}
-  .doc{max-width:920px;margin:0 auto;padding:28px 36px 90px}h1,h2,h3,h4{line-height:1.25;margin:24px 0 12px}h1{font-size:2em;border-bottom:1px solid #d8dee4;padding-bottom:.3em}h2{font-size:1.5em;border-bottom:1px solid #d8dee4;padding-bottom:.3em}
-  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}
+  .doc{max-width:920px;margin:0 auto;padding:28px 36px 90px}h1,h2,h3,h4{line-height:1.25;margin:24px 0 12px}h1{font-size:2em}h2{font-size:1.5em}
+  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
@@ -1106,8 +1223,15 @@ function previewShell(body){
   @media(max-width:650px){.output-gallery{padding:24px 16px 60px}.output-card-header{align-items:flex-start;flex-direction:column}.output-media iframe{height:480px}}
 
   </style></head><body>${body}<script>
+  function inlineBlockFrom(node){
+    return (node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement)?.closest('[data-inline-line]');
+  }
+  function activeInlineBlock(){
+    const selection=window.getSelection();
+    return selection?.rangeCount?inlineBlockFrom(selection.anchorNode):null;
+  }
   document.addEventListener('input',e=>{
-    const block=e.target.closest('[data-inline-line]');
+    const block=inlineBlockFrom(e.target)||activeInlineBlock();
     if(block)parent.postMessage({type:'inlineInput',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),html:block.innerHTML},'*');
   });
   function splitInlineSelection(block){
@@ -1120,16 +1244,42 @@ function previewShell(body){
     const html=fragment=>{const box=document.createElement('div');box.appendChild(fragment);return box.innerHTML};
     return {range,beforeHtml:html(before.cloneContents()),afterHtml:html(after.cloneContents()),beforeText:before.cloneContents().textContent,afterText:after.cloneContents().textContent};
   }
+  function crossInlineSelection(){
+    const selection=window.getSelection();
+    if(!selection.rangeCount||selection.isCollapsed)return null;
+    const range=selection.getRangeAt(0);
+    const blockFor=node=>(node.nodeType===Node.ELEMENT_NODE?node:node.parentElement)?.closest('[data-inline-line]');
+    const startBlock=blockFor(range.startContainer);
+    const endBlock=blockFor(range.endContainer);
+    if(!startBlock||!endBlock||startBlock===endBlock)return null;
+    const before=document.createRange();before.selectNodeContents(startBlock);before.setEnd(range.startContainer,range.startOffset);
+    const after=document.createRange();after.selectNodeContents(endBlock);after.setStart(range.endContainer,range.endOffset);
+    const html=fragment=>{const box=document.createElement('div');box.appendChild(fragment);return box.innerHTML};
+    return {
+      startLine:Number(startBlock.dataset.inlineLine),
+      endLine:Number(endBlock.dataset.inlineLine),
+      beforeHtml:html(before.cloneContents()),
+      afterHtml:html(after.cloneContents())
+    };
+  }
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){
       e.preventDefault();parent.postMessage({type:'inlineSave'},'*');return;
     }
-    const block=e.target.closest('[data-inline-line]');
+    const block=inlineBlockFrom(e.target)||activeInlineBlock();
     if(!block||!['Enter','Backspace','Delete'].includes(e.key))return;
+    if((e.key==='Backspace'||e.key==='Delete')&&!window.getSelection().isCollapsed){
+      const cross=crossInlineSelection();
+      if(cross){
+        e.preventDefault();
+        parent.postMessage({type:'inlineDeleteRange',renderId:Number(block.dataset.inlineRender),...cross},'*');
+        return;
+      }
+    }
     const split=splitInlineSelection(block);
     if(!split)return;
     if(e.key==='Backspace'&&split.range.collapsed&&!split.beforeText){
-      e.preventDefault();parent.postMessage({type:'inlineJoin',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),direction:'back'},'*');return;
+      e.preventDefault();parent.postMessage({type:'inlineBackspace',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender)},'*');return;
     }
     if(e.key==='Delete'&&split.range.collapsed&&!split.afterText){
       e.preventDefault();parent.postMessage({type:'inlineJoin',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),direction:'forward'},'*');return;
@@ -1139,7 +1289,7 @@ function previewShell(body){
     parent.postMessage({type:'inlineEnter',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),beforeHtml:split.beforeHtml,afterHtml:split.afterHtml},'*');
   });
   document.addEventListener('paste',e=>{
-    const block=e.target.closest('[data-inline-line]');
+    const block=inlineBlockFrom(e.target)||activeInlineBlock();
     if(!block)return;
     const split=splitInlineSelection(block);
     if(!split)return;
@@ -1163,6 +1313,7 @@ function previewShell(body){
     const f=e.target.closest('.org-file-link');if(f){e.preventDefault();parent.postMessage({type:'openOrgLink',target:f.dataset.target},'*');return}
     const p=e.target.closest('.wb-link');if(p){e.preventDefault();parent.postMessage({type:'openWorkbenchPath',path:p.dataset.path,kind:p.dataset.kind},'*');return}
     const h=e.target.closest('.home-config-edit');if(h){e.preventDefault();parent.postMessage({type:'editHomeShortcuts'},'*');return}
+    const syntax=e.target.closest('.syntax-details summary');if(syntax&&syntax.parentElement.open){parent.postMessage({type:'closeSyntaxGuide'},'*');return}
     const a=e.target.closest('.agenda-open');if(a){e.preventDefault();parent.postMessage({type:'openAgenda'},'*');return}
     const r=e.target.closest('.agenda-refresh');if(r){e.preventDefault();parent.postMessage({type:'refreshAgenda'},'*');return}
     const i=e.target.closest('.agenda-item-link');if(i){e.preventDefault();parent.postMessage({type:'openAgendaItem',path:i.dataset.agendaPath,line:Number(i.dataset.agendaLine||1)},'*');return}
@@ -1415,6 +1566,17 @@ function inlinePrefix(line,ext){
     : /^(#{1,6}\s+|\s*[-*+]\s+)/;
   return line.match(pattern)?.[0]||'';
 }
+function normalizeInlineSource(value,original,ext){
+  if(ext==='.org'){
+    if(/^\*+\s+/.test(original))return value.replace(/^\*+\s+/,'');
+    if(/^\s*[-+]\s+/.test(original))return value.replace(/^\s*[-+]\s+(?:\[[ Xx]\]\s+)?/,'');
+  }
+  if(ext==='.md'){
+    if(/^#{1,6}\s+/.test(original))return value.replace(/^#{1,6}\s+/,'');
+    if(/^\s*[-*+]\s+/.test(original))return value.replace(/^\s*[-*+]\s+/,'');
+  }
+  return value;
+}
 function nextInlinePrefix(line,ext){
   if(ext==='.org'){
     const check=line.match(/^(\s*[-+])\s+\[[ Xx]\]\s+/);
@@ -1433,7 +1595,8 @@ function updateInlineLine(line,html){
   if(!['.org','.md'].includes(extOf(currentPath)))return;
   const lines=editor.value.split('\n');
   if(!Number.isInteger(line)||line<0||line>=lines.length)return;
-  const next=inlinePrefix(lines[line],extOf(currentPath))+inlineHtmlToSource(html,extOf(currentPath));
+  const ext=extOf(currentPath);
+  const next=inlinePrefix(lines[line],ext)+normalizeInlineSource(inlineHtmlToSource(html,ext),lines[line],ext);
   if(next===lines[line])return;
   lines[line]=next;
   editor.value=lines.join('\n');
@@ -1446,9 +1609,32 @@ async function insertInlineLine(line,beforeHtml,afterHtml){
   if(!Number.isInteger(line)||line<0||line>=lines.length)return;
   const ext=extOf(currentPath);
   const original=lines[line];
+  const beforeSource=normalizeInlineSource(inlineHtmlToSource(beforeHtml,ext),original,ext);
+  const afterSource=normalizeInlineSource(inlineHtmlToSource(afterHtml,ext),original,ext);
+  const listMarker=ext==='.org'
+    ? /^(\s*[-+])\s+(?:\[[ Xx]\]\s+)?/
+    : /^(\s*[-+*])\s+/;
+  if(!beforeSource.trim()&&!afterSource.trim()&&listMarker.test(original)){
+    lines[line]='';
+    editor.value=lines.join('\n');
+    markDirty(true);
+    scheduleInlineSave();
+    const focusBlank=()=>{
+      const block=preview.contentDocument?.querySelector(`[data-inline-line="${line}"]`);
+      if(!block)return;
+      block.focus();
+      const range=preview.contentDocument.createRange();
+      range.selectNodeContents(block);range.collapse(true);
+      const selection=preview.contentWindow.getSelection();
+      selection.removeAllRanges();selection.addRange(range);
+    };
+    preview.addEventListener('load',focusBlank,{once:true});
+    await refreshPreview({preserveScroll:true});
+    return;
+  }
   lines.splice(line,1,
-    inlinePrefix(original,ext)+inlineHtmlToSource(beforeHtml,ext),
-    nextInlinePrefix(original,ext)+inlineHtmlToSource(afterHtml,ext)
+    inlinePrefix(original,ext)+beforeSource,
+    nextInlinePrefix(original,ext)+afterSource
   );
   editor.value=lines.join('\n');
   markDirty(true);
@@ -1491,6 +1677,57 @@ async function pasteInlineLines(line,beforeHtml,afterHtml,text){
   preview.addEventListener('load',focusLast,{once:true});
   await refreshPreview({preserveScroll:true});
 }
+async function deleteInlineRange(startLine,endLine,beforeHtml,afterHtml){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(startLine)||!Number.isInteger(endLine)||startLine<0||endLine>=lines.length||startLine>endLine)return;
+  const ext=extOf(currentPath);
+  lines.splice(startLine,endLine-startLine+1,
+    inlinePrefix(lines[startLine],ext)+inlineHtmlToSource(beforeHtml,ext)+inlineHtmlToSource(afterHtml,ext)
+  );
+  editor.value=lines.join('\n');
+  markDirty(true);
+  scheduleInlineSave();
+  const focusJoined=()=>{
+    const block=preview.contentDocument?.querySelector(`[data-inline-line="${startLine}"]`);
+    if(!block)return;
+    block.focus();
+    const range=preview.contentDocument.createRange();
+    range.selectNodeContents(block);range.collapse(false);
+    const selection=preview.contentWindow.getSelection();
+    selection.removeAllRanges();selection.addRange(range);
+  };
+  preview.addEventListener('load',focusJoined,{once:true});
+  await refreshPreview({preserveScroll:true});
+}
+async function backspaceInline(line){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(line)||line<0||line>=lines.length)return;
+  const ext=extOf(currentPath);
+  const marker=ext==='.org'
+    ? lines[line].match(/^(\s*[-+])\s+(?:\[[ Xx]\]\s+)?/)
+    : lines[line].match(/^(\s*[-+*])\s+/);
+  if(marker){
+    lines[line]=lines[line].slice(marker[0].length);
+    editor.value=lines.join('\n');
+    markDirty(true);
+    scheduleInlineSave();
+    const focusLine=()=>{
+      const block=preview.contentDocument?.querySelector(`[data-inline-line="${line}"]`);
+      if(!block)return;
+      block.focus();
+      const range=preview.contentDocument.createRange();
+      range.selectNodeContents(block);range.collapse(true);
+      const selection=preview.contentWindow.getSelection();
+      selection.removeAllRanges();selection.addRange(range);
+    };
+    preview.addEventListener('load',focusLine,{once:true});
+    await refreshPreview({preserveScroll:true});
+    return;
+  }
+  await joinInlineLines(line,'back');
+}
 async function joinInlineLines(line,direction){
   if(!['.org','.md'].includes(extOf(currentPath)))return;
   const lines=editor.value.split('\n');
@@ -1526,6 +1763,12 @@ window.addEventListener('message',async e=>{
   }else if(e.data.type==='inlinePaste'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     await pasteInlineLines(e.data.line,e.data.beforeHtml,e.data.afterHtml,e.data.text);
+  }else if(e.data.type==='inlineDeleteRange'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await deleteInlineRange(e.data.startLine,e.data.endLine,e.data.beforeHtml,e.data.afterHtml);
+  }else if(e.data.type==='inlineBackspace'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await backspaceInline(e.data.line);
   }else if(e.data.type==='inlineJoin'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     await joinInlineLines(e.data.line,e.data.direction);
@@ -1591,6 +1834,13 @@ window.addEventListener('message',async e=>{
   }else if(e.data.type==='editHomeShortcuts'){
     if(e.source!==preview.contentWindow)return;
     try{await openHomeSettings()}catch(err){showToast(err.message||String(err),true)}
+  }else if(e.data.type==='closeSyntaxGuide'){
+    if(e.source!==preview.contentWindow)return;
+    const target=helpReturnNavIndex;
+    helpReturnNavIndex=null;
+    if(Number.isInteger(target)&&target!==navIndex){
+      await goHistory(target-navIndex);
+    }
   }else if(e.data.type==='openAgenda'){
     await showAgenda();
 
@@ -1935,15 +2185,13 @@ window.workbench.onFsChanged(()=>{
       await loadDir(currentDir,false,true);
     }catch{}
 
-    if(
-      currentPath &&
-      !dirty &&
-      Date.now()>=suppressFsReloadUntil
-    ){
-      try{
-        await openFile(currentPath,false);
-      }catch{}
-    }
+    if(!currentPath||dirty||Date.now()<suppressFsReloadUntil)return;
+    const pathAtCheck=currentPath;
+    try{
+      const latest=await window.workbench.readFile(pathAtCheck);
+      if(currentPath!==pathAtCheck||dirty||latest.sha256===currentHash)return;
+      await openFile(pathAtCheck,false);
+    }catch{}
   },300);
 });
 

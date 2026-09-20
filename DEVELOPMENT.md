@@ -26,6 +26,8 @@ That path is foundational. UI work should not replace it with `exec`, a fake com
 
 ## Versioning
 
+The current development line is `0.9.0`. The frozen functional baseline is `0.8.3` at `v0.8.3-final`.
+
 Keep `main` usable. Mark known-good releases with annotated Git tags such as:
 
 ```bash
@@ -45,11 +47,12 @@ Before calling a version stable:
 4. Files navigation changes the terminal directory, and terminal `cd` updates Files
 5. `wb FILE` and `wb .` open the requested paths
 6. Org rendering and Quick Edit
-7. PDF preview
-8. Python or shell execution
-9. LaTeX build if available
-10. `npm run pack:mac`
-11. launch the packaged `.app` from Finder or `/Applications`
+7. keyboard shortcuts in Help match the actual Workbench, Quick Edit, and terminal behavior
+8. PDF preview
+9. Python or shell execution
+10. LaTeX build if available
+11. `npm run pack:mac`
+12. launch the packaged `.app` from Finder or `/Applications`
 
 ## Canonical source directory
 

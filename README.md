@@ -38,7 +38,27 @@ The dashboard provides direct entry points to:
 
 The file tree and dashboard are simply views over the existing filesystem and Org structure. No duplicate Workbench database is created.
 
-Org, Markdown, and notebooks open in rendered view. Use **Edit source** to show the source beside the preview. Org and Markdown previews update while keeping their scroll position. Code files open with source visible. LaTeX opens its PDF when one exists; otherwise its source is visible with a build prompt. The same source toggle works for LaTeX and code.
+## Independent Workbench instances
+
+To keep separate Workbench sessions on different macOS desktops, launch another app process with:
+
+    open -n -a "Norcini Workbench"
+
+Each instance has its own Files location, rendered view, Quick Edit state, and integrated terminal. The filesystem and Org files remain shared and canonical. A `wb FILE` command is handled by the instance whose terminal ran it.
+
+Org and Markdown open in rendered view and can be edited directly in that view. **Show source** still opens the synchronized source editor when you need it. Notebook files render their cells and outputs, while code files open with source visible. LaTeX opens its source first, with a sibling PDF available for viewing after a build. Org and Markdown previews update while keeping their scroll position.
+
+The Files pane includes controls to move up one folder or jump to your macOS home folder. Home can also show the most recently edited notes from the Org library.
+
+### Keyboard shortcuts
+
+- `⌘S` or `Ctrl-S` saves the current file.
+- `Esc` closes the Help menu.
+- In rendered Org or Markdown, `Enter` splits a block and `Backspace` or `Delete` joins blocks at their boundaries.
+- In Quick Edit, `Enter` continues a non-empty bullet, checkbox, or numbered list. Pressing `Enter` on an empty item exits the list.
+- In the Bash terminal, `Tab` completes commands, the arrow keys browse shell history, `Ctrl-C` interrupts a command, and `Ctrl-D` sends EOF or exits the shell.
+
+These terminal keys retain ordinary Bash and xterm behavior. Workbench does not replace the underlying Org editing conventions.
 
 Click **Edit** at the lower right of the Home header to change its text and the cards inside Workbench. You can add, remove, and reorder cards; change their labels, titles, notes, links, and agenda display; and save the result. The settings live in a local `home-shortcuts.json` file. Existing project and course shortcuts are carried into the editor on first use. This file contains Home presentation and navigation preferences only.
 
@@ -132,7 +152,7 @@ It is not intended to become the place where research data, notes, references, o
 
 ## Version
 
-Current frozen functional baseline: **0.8.3** at tag `v0.8.3-final`. The earlier `v0.8.3` tag points to a prior 0.8.3 commit.
+Current development version: **0.9.0**. The frozen functional 0.8.3 baseline remains available at tag `v0.8.3-final`. The earlier `v0.8.3` tag points to a prior 0.8.3 commit.
 
 ## Future AI
 

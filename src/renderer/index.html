@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="brand-group">
       <div class="app-mark">NW</div>
-      <div class="brand">Norcini Workbench <span class="version">0.8.3</span></div>
+      <div class="brand">Norcini Workbench <span class="version">0.9.0</span></div>
     </div>
     <div class="nav-actions">
       <button id="backBtn" class="icon-btn" title="Back" disabled>‹</button>
@@ -32,7 +32,34 @@
             <strong>Workbench commands</strong>
             <div><code>wb FILE</code><span>Open file in Workbench</span></div>
             <div><code>wb .</code><span>Open terminal directory</span></div>
-            <div><code>⌘S</code><span>Save now</span></div>
+            <div><code>open -n -a "Norcini Workbench"</code><span>Open an independent instance</span></div>
+          </div>
+
+          <div class="help-section">
+            <strong>Keyboard Shortcuts</strong>
+            <div><code>⌘S / Ctrl-S</code><span>Save current file</span></div>
+            <div><code>Esc</code><span>Close Help</span></div>
+          </div>
+
+          <div class="help-section">
+            <strong>Rendered Org / Markdown</strong>
+            <div><code>Enter</code><span>Split the current rendered block</span></div>
+            <div><code>Backspace / Delete</code><span>Join adjacent blocks at their boundaries</span></div>
+            <div><code>⌘S / Ctrl-S</code><span>Save rendered edits</span></div>
+          </div>
+
+          <div class="help-section">
+            <strong>Quick Edit</strong>
+            <div><code>Enter</code><span>Continue a non-empty bullet, checkbox, or numbered list</span></div>
+            <div><code>Enter on empty item</code><span>Exit the list</span></div>
+          </div>
+
+          <div class="help-section">
+            <strong>Terminal Bash</strong>
+            <div><code>Tab</code><span>Shell completion</span></div>
+            <div><code>↑ / ↓</code><span>Shell command history</span></div>
+            <div><code>Ctrl-C</code><span>Interrupt the current command</span></div>
+            <div><code>Ctrl-D</code><span>Send EOF or exit a shell</span></div>
           </div>
 
           <div class="help-section">

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -351,6 +351,18 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin' && app.dock) {
     const dockIcon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon.png'));
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+    app.dock.setMenu(Menu.buildFromTemplate([
+      {
+        label: 'New Workbench Instance',
+        click: () => {
+          const child = spawn('/usr/bin/open', ['-n', '-a', app.getName()], {
+            detached: true,
+            stdio: 'ignore'
+          });
+          child.unref();
+        }
+      }
+    ]));
   }
 
   ensureRoots();
