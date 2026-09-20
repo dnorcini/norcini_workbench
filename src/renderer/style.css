@@ -36,6 +36,7 @@ dialog{border:1px solid var(--border);border-radius:10px;box-shadow:0 18px 60px 
 .dialog-form input:focus-visible,.dialog-form select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .dialog-form .dialog-actions{gap:8px;margin-top:2px;padding-top:16px;border-top:1px solid var(--border-subtle)}
 .dialog-form .dialog-actions button{min-width:82px}
+.org-planning{margin:2px 0 8px;padding-left:18px;color:var(--muted);font-size:.92em}.org-planning-key{font-weight:700;color:#57606a}
 .system-check-dialog{width:min(760px,calc(100vw - 48px));max-width:760px}
 .system-check-results{display:grid;gap:6px;max-height:60vh;overflow:auto}
 .system-check-row{display:grid;grid-template-columns:76px 170px minmax(0,1fr);gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:12px}

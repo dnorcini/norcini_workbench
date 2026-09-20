@@ -562,6 +562,8 @@ function renderOrg(text){
     m=line.match(/^#\+TITLE:\s*(.*)$/i);if(m){out.push(`<h1 ${inlineEditAttrs(i)}>${orgInline(m[1])}</h1>`);return}
     if(/^#\+/.test(line))return;
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
+    m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
+    if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
     m=line.match(/^(\*+)\s+(TODO|DONE)\s+(.*)$/);
     if(m){
       const done=m[2]==='DONE';
@@ -1019,8 +1021,8 @@ function homeDashboard(){
             <h3>Tasks</h3>
             <div class="syntax-row"><code>* TODO Task</code><span>Open task</span></div>
             <div class="syntax-row"><code>* DONE Task</code><span>Completed task</span></div>
-            <div class="syntax-row"><code>SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Scheduled</span></div>
-            <div class="syntax-row"><code>DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Deadline</span></div>
+            <div class="syntax-row"><code>  SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Planning line beneath a heading</span></div>
+            <div class="syntax-row"><code>  DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Planning line beneath a heading</span></div>
           </div>
 
           <div class="syntax-section">
@@ -1052,8 +1054,8 @@ function homeDashboard(){
           <div class="syntax-section">
             <h3>Agenda fields</h3>
             <div class="syntax-row"><code>&lt;2026-09-21 Mon&gt;</code><span>Timestamp recognized by the agenda</span></div>
-            <div class="syntax-row"><code>SCHEDULED: &lt;...&gt;</code><span>Scheduled agenda item</span></div>
-            <div class="syntax-row"><code>DEADLINE: &lt;...&gt;</code><span>Deadline agenda item</span></div>
+            <div class="syntax-row"><code>  SCHEDULED: &lt;...&gt;</code><span>Scheduled planning line and agenda item</span></div>
+            <div class="syntax-row"><code>  DEADLINE: &lt;...&gt;</code><span>Deadline planning line and agenda item</span></div>
             <div class="syntax-row"><code>master.org / inbox.org</code><span>Files scanned by the live agenda</span></div>
           </div>
 
