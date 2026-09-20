@@ -36,6 +36,8 @@ Node and npm major ranges. Run `./scripts/doctor.sh` for a read-only check.
 Workbench launches ordinary command-line tools rather than bundling replacements. Depending on what you do, this may include Bash, Python, R, Jupyter, LaTeX, Git, SSH, or Emacs.
 
 LaTeX lookup includes `/Library/TeX/texbin` and common Homebrew/system locations.
+Workbench uses `pdflatex` directly when available and uses `latexmk` for an
+optional multi-pass build when it is installed.
 
 ## Lockfile
 

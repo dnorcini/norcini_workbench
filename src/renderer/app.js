@@ -91,8 +91,8 @@ if(helpMenu){
         <div><code>./a</code><span>Run compiled program</span></div>
         <div><code>root -l -q a.C</code><span>Run ROOT macro</span></div>
         <div><code>root -l -q 'a.C+'</code><span>Compile ROOT macro with ACLiC</span></div>
-        <div><code>latexmk -pdf a.tex</code><span>Build LaTeX PDF</span></div>
-        <div><code>pdflatex a.tex</code><span>Single LaTeX pass</span></div>
+        <div><code>pdflatex a.tex</code><span>Build a LaTeX PDF directly</span></div>
+        <div><code>latexmk -pdf a.tex</code><span>Optional multi-pass LaTeX build</span></div>
       </div>
 
       <div class="help-section">
@@ -1061,6 +1061,12 @@ function homeDashboard(){
             <h3>Tables and source blocks</h3>
             <div class="syntax-row"><code>| Name | Value |</code><span>Org table source is preserved; table layout is not rendered yet</span></div>
             <div class="syntax-row"><code>#+begin_src python</code><span>Source block rendered as read-only code</span></div>
+          </div>
+
+          <div class="syntax-section">
+            <h3>LaTeX</h3>
+            <div class="syntax-row"><code>pdflatex file.tex</code><span>Build a PDF directly; available fallback</span></div>
+            <div class="syntax-row"><code>latexmk -pdf file.tex</code><span>Optional multi-pass build when installed</span></div>
           </div>
 
         </div>
