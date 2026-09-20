@@ -2051,9 +2051,34 @@ document.getElementById('refreshPreviewBtn').onclick=refreshPreview;
 backBtn.onclick=()=>goHistory(-1);
 forwardBtn.onclick=()=>goHistory(1);
 openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
+function sourceLineAtRenderedViewport(){
+  try{
+    const doc=preview.contentDocument;
+    if(!doc)return null;
+    const viewportHeight=preview.clientHeight||window.innerHeight;
+    const blocks=[...doc.querySelectorAll('[data-inline-line]')];
+    let candidate=null;
+    for(const block of blocks){
+      const rect=block.getBoundingClientRect();
+      if(rect.top<=viewportHeight*0.35)candidate=Number(block.dataset.inlineLine);
+      else if(candidate!==null)break;
+    }
+    return Number.isInteger(candidate)?candidate:null;
+  }catch{return null}
+}
 document.getElementById('toggleEditorBtn').onclick=()=>{
+  const showSource=!editorVisible;
+  const line=showSource?sourceLineAtRenderedViewport():null;
   setEditorVisible(!editorVisible);
-  if(editorVisible)editor.focus();
+  if(showSource){
+    requestAnimationFrame(()=>{
+      if(Number.isInteger(line)){
+        const lineHeight=parseFloat(getComputedStyle(editor).lineHeight)||20;
+        editor.scrollTop=Math.max(0,(line-2)*lineHeight);
+      }
+      editor.focus();
+    });
+  }
 };
 document.getElementById('homeBtn').onclick=()=>showHome();
 document.getElementById('filesUpBtn').onclick=async()=>{
