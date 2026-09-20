@@ -170,7 +170,8 @@ function quoteShell(s) {
 }
 
 function findExecutable(names) {
-  const extra = ['/Library/TeX/texbin', '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+  const pathDirs = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const extra = [...pathDirs, '/Library/TeX/texbin', '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
   for (const n of names) {
     if (path.isAbsolute(n) && fs.existsSync(n)) return n;
     for (const dir of extra) {
@@ -405,29 +406,42 @@ function diagnosticPath(label, target, required = true, writable = false) {
 ipcMain.handle('diagnostics:get', async () => {
   const checks = [];
   const add = (label, result) => checks.push({ label, ...result });
+  const packaged = app.isPackaged;
   add('macOS', diagnosticCommand('/usr/bin/sw_vers', ['-productVersion']));
   add('CPU architecture', { status: 'ok', detail: `${process.arch} (${os.arch()})` });
-  add('Node.js', { status: 'ok', detail: process.version });
+  add('Electron Node runtime', { status: 'ok', detail: process.version });
   add('Electron', { status: 'ok', detail: process.versions.electron });
-  add('npm', diagnosticCommand('npm'));
-  add('Git', diagnosticCommand('git'));
+  const hostNode = findExecutable(['node']);
+  const hostNpm = findExecutable(['npm']);
+  add('Host Node.js', hostNode ? diagnosticCommand(hostNode) : { status: packaged ? 'warning' : 'missing', detail: 'node is not available from the packaged app PATH' });
+  add('npm', hostNpm ? diagnosticCommand(hostNpm) : { status: packaged ? 'warning' : 'missing', detail: 'npm is not available from the packaged app PATH' });
+  add('Git', diagnosticCommand(findExecutable(['git']) || 'git'));
   add('Bash', diagnosticCommand('/bin/bash'));
-  add('Repository', diagnosticPath('Repository', path.resolve(__dirname, '..')));
+  add('Repository', packaged
+    ? { status: 'warning', detail: 'Packaged app is running; source repository check is not applicable' }
+    : diagnosticPath('Repository', path.resolve(__dirname, '..')));
   add('Org root', diagnosticPath('Org root', ROOTS.org, true, true));
   add('Hopkins root', diagnosticPath('Hopkins root', ROOTS.hopkins, true, true));
   add('Teaching root', diagnosticPath('Teaching root', path.join(ROOTS.hopkins, 'teaching'), false, true));
-  add('Python', diagnosticCommand('python3'));
-  add('R', diagnosticCommand('Rscript'));
+  add('Python', diagnosticCommand(findExecutable(['python3']) || 'python3'));
+  add('R', diagnosticCommand(findExecutable(['Rscript']) || 'Rscript'));
   add('ROOT', diagnosticCommand(findExecutable(['root-config']) || 'root-config', ['--version']));
   add('latexmk', diagnosticCommand(findExecutable(['latexmk']) || 'latexmk'));
   add('pdflatex', diagnosticCommand(findExecutable(['pdflatex']) || 'pdflatex'));
   add('Zotero data', diagnosticPath('Zotero data', path.join(HOME, 'Zotero'), false, false));
   add('Zotero application', diagnosticPath('Zotero application', '/Applications/Zotero.app', false, false));
   add('Packaged app', diagnosticPath('Packaged app', '/Applications/Norcini Workbench.app', false, false));
-  add('node_modules', diagnosticPath('node_modules', path.join(__dirname, '..', 'node_modules'), true, true));
-  add('Electron dependency', diagnosticPath('Electron dependency', path.join(__dirname, '..', 'node_modules', 'electron', 'package.json')));
-  add('node-pty native module', diagnosticPath('node-pty native module', path.join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', 'pty.node')));
-  add('package lock', diagnosticPath('package lock', path.join(__dirname, '..', 'package-lock.json')));
+  if (packaged) {
+    add('node_modules', { status: 'ok', detail: 'Bundled with the packaged application' });
+    add('Electron dependency', { status: 'ok', detail: `Electron ${process.versions.electron} is running` });
+    add('node-pty native module', { status: 'ok', detail: 'node-pty loaded by the running application' });
+    add('package lock', { status: 'warning', detail: 'Package lock is kept in the source repository, not the installed app' });
+  } else {
+    add('node_modules', diagnosticPath('node_modules', path.join(__dirname, '..', 'node_modules'), true, true));
+    add('Electron dependency', diagnosticPath('Electron dependency', path.join(__dirname, '..', 'node_modules', 'electron', 'package.json')));
+    add('node-pty native module', diagnosticPath('node-pty native module', path.join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', 'pty.node')));
+    add('package lock', diagnosticPath('package lock', path.join(__dirname, '..', 'package-lock.json')));
+  }
   let canonicalAccess = { status: 'broken', detail: 'Org root is not readable and writable' };
   try {
     fs.accessSync(ROOTS.org, fs.constants.R_OK | fs.constants.W_OK);
