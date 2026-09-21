@@ -1836,6 +1836,17 @@ async function deleteInlineLine(line){
   recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
+  const focusLine=Math.max(0,Math.min(line,editor.value.split('\n').length-1));
+  const restoreFocus=()=>{
+    const block=preview.contentDocument?.querySelector(`[data-inline-line="${focusLine}"]`);
+    if(!block)return;
+    block.focus();
+    const range=preview.contentDocument.createRange();
+    range.selectNodeContents(block);range.collapse(true);
+    const selection=preview.contentWindow.getSelection();
+    selection.removeAllRanges();selection.addRange(range);
+  };
+  preview.addEventListener('load',restoreFocus,{once:true});
   await refreshPreview({preserveScroll:true});
 }
 async function backspaceInline(line){
@@ -2220,11 +2231,13 @@ function sourceLineAtRenderedViewport(){
     const doc=preview.contentDocument;
     if(!doc)return null;
     const viewportHeight=preview.clientHeight||window.innerHeight;
+    const scrollTop=preview.contentWindow?.scrollY||0;
+    const targetTop=scrollTop+viewportHeight*0.35;
     const blocks=[...doc.querySelectorAll('[data-inline-line]')];
     let candidate=null;
     for(const block of blocks){
-      const rect=block.getBoundingClientRect();
-      if(rect.top<=viewportHeight*0.35)candidate=Number(block.dataset.inlineLine);
+      const top=block.getBoundingClientRect().top+scrollTop;
+      if(top<=targetTop)candidate=Number(block.dataset.inlineLine);
       else if(candidate!==null)break;
     }
     return Number.isInteger(candidate)?candidate:null;
