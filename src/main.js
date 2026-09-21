@@ -678,7 +678,7 @@ ipcMain.handle('export-rendered-pdf', async (_event, { html, title }) => {
   const safeTitle = String(title || 'norcini-workbench-export').replace(/[^\w.-]+/g, '_');
   const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Export rendered PDF',
-    defaultPath: path.join(HOME, `${safeTitle}.pdf`),
+    defaultPath: path.join(app.getPath('downloads'), `${safeTitle}.pdf`),
     filters: [{ name: 'PDF document', extensions: ['pdf'] }]
   });
   if (result.canceled || !result.filePath) return { canceled: true };
