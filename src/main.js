@@ -1099,7 +1099,6 @@ ipcMain.handle('terminal-ping', async () => {
 
 ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
   try {
-    const terminalSender = event.sender;
     const cwd = cwdVirtual ? resolveVirtual(cwdVirtual) : ROOTS.org;
     const id = crypto.randomUUID();
     const env = {
@@ -1154,8 +1153,8 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
           if (
             virt &&
             fs.existsSync(requested) &&
-            terminalSender &&
-            !terminalSender.isDestroyed()
+            mainWindow &&
+            !mainWindow.isDestroyed()
           ) {
             const st = fs.statSync(requested);
 
@@ -1163,7 +1162,7 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
               kind === '778;workbench-cwd' &&
               st.isDirectory()
             ) {
-              terminalSender.send(
+              mainWindow.webContents.send(
                 'workbench-open-path',
                 {
                   path: virt,
@@ -1174,7 +1173,7 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
             }
 
             if (kind === '777;workbench-open') {
-              terminalSender.send(
+              mainWindow.webContents.send(
                 'workbench-open-path',
                 {
                   path: virt,
