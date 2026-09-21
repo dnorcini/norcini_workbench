@@ -522,6 +522,20 @@ ipcMain.handle('read-file', async (_event, vpath) => {
   };
 });
 
+ipcMain.handle('read-image-data', async (_event, vpath) => {
+  const abs = resolveVirtual(vpath);
+  const ext = path.extname(abs).toLowerCase();
+  const mime = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'
+  }[ext];
+  if (!mime) throw new Error('Unsupported image format');
+  const stat = await fsp.stat(abs);
+  if (!stat.isFile()) throw new Error('Not an image file');
+  const data = await fsp.readFile(abs);
+  return { dataUrl: `data:${mime};base64,${data.toString('base64')}` };
+});
+
 ipcMain.handle('save-file', async (_event, { path: vpath, content, expectedHash }) => {
   const abs = resolveVirtual(vpath);
   const st = await statSafe(abs);
@@ -643,6 +657,34 @@ ipcMain.handle('open-default', async (_event, vpath) => {
   const error = await shell.openPath(abs);
   if (error) throw new Error(error);
   return { ok: true };
+});
+
+ipcMain.handle('export-rendered-pdf', async (_event, { html, title }) => {
+  if (typeof html !== 'string' || !html.trim()) throw new Error('Rendered view is empty');
+  const safeTitle = String(title || 'norcini-workbench-export').replace(/[^\w.-]+/g, '_');
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export rendered PDF',
+    defaultPath: path.join(HOME, `${safeTitle}.pdf`),
+    filters: [{ name: 'PDF document', extensions: ['pdf'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+
+  const exportWindow = new BrowserWindow({
+    show: false,
+    webPreferences: { sandbox: false, contextIsolation: true, nodeIntegration: false }
+  });
+  try {
+    await exportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pdf = await exportWindow.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'Letter',
+      margins: { marginType: 'default' }
+    });
+    await fsp.writeFile(result.filePath, pdf);
+    return { path: result.filePath };
+  } finally {
+    if (!exportWindow.isDestroyed()) exportWindow.destroy();
+  }
 });
 
 ipcMain.handle('new-note', async (_event, { category, title, dated, date }) => {

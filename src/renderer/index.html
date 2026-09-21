@@ -66,6 +66,9 @@
             <strong>Org syntax</strong>
             <div><code>* Heading</code><span>Heading</span></div>
             <div><code>* TODO Task</code><span>Task</span></div>
+            <div><code>* DONE Task</code><span>Completed task</span></div>
+            <div><code>* NEXT / WAITING / SOMEDAY</code><span>Custom TODO states</span></div>
+            <div><code>* CANCELLED Task</code><span>Cancelled task</span></div>
             <div><code>- [ ] Item</code><span>Checkbox</span></div>
             <div><code>SCHEDULED:</code><span>Planning line beneath a heading</span></div>
             <div><code>DEADLINE:</code><span>Planning line beneath a heading</span></div>
@@ -128,6 +131,7 @@
 
           <button id="buildBtn" hidden>Build PDF</button>
           <button id="runNotebookBtn" title="Execute the whole notebook; save outputs when the run succeeds" hidden>Run all cells</button>
+          <button id="exportPdfBtn" hidden>Export PDF</button>
           <button id="openDefaultBtn">Open in macOS</button>
           <button id="refreshPreviewBtn">Refresh</button>
         </div>

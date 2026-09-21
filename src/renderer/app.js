@@ -126,7 +126,11 @@ if(helpMenu){
         <strong>Org syntax</strong>
         <div><code>* Heading</code><span>Heading</span></div>
         <div><code>* TODO Task</code><span>Task</span></div>
+        <div><code>* DONE Task</code><span>Completed task</span></div>
+        <div><code>* NEXT Task</code><span>Custom TODO state</span></div>
+        <div><code>* WAITING Task</code><span>Custom TODO state</span></div>
         <div><code>* SOMEDAY Task</code><span>Custom TODO state</span></div>
+        <div><code>* CANCELLED Task</code><span>Custom TODO state</span></div>
         <div><code>- [ ] Item</code><span>Checkbox</span></div>
         <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
         <div><code>DEADLINE:</code><span>Deadline</span></div>
@@ -189,6 +193,7 @@ const activePath = document.getElementById('activePath');
 const backBtn = document.getElementById('backBtn');
 const forwardBtn = document.getElementById('forwardBtn');
 const openDefaultBtn = document.getElementById('openDefaultBtn');
+const exportPdfBtn = document.getElementById('exportPdfBtn');
 
 const term = new Terminal({
   cursorBlink:true,
@@ -240,6 +245,7 @@ function updateContextActions(){
   buildBtn.hidden=ext!=='.tex';
   runNotebookBtn.hidden=ext!=='.ipynb';
   openDefaultBtn.disabled=!currentPath;
+  exportPdfBtn.hidden=!currentPath||!['.org','.md'].includes(ext);
   document.getElementById('toggleEditorBtn').disabled=!currentPath;
 }
 function updateNavigation(){
@@ -571,8 +577,20 @@ function orgInline(s,current){
   return x;
 }
 function inlineEditAttrs(line){return `data-inline-line="${line}" data-inline-render="${inlineRenderId}"`}
-function markdownInline(s){
-  let x=esc(s);
+function markdownInline(s,imageUrls={}){
+  const images=[];
+  const imageTokenized=String(s).replace(/!\[([^\]]*)\]\(([^)]+)\)/g,(_,alt,target)=>{
+    const index=images.push({alt,target})-1;
+    return `\u0000IMG${index}\u0000`;
+  });
+  let x=esc(imageTokenized);
+  images.forEach((image,index)=>{
+    const src=imageUrls[image.target]||imageUrls[decodeURIComponent(image.target)]||'';
+    const replacement=src
+      ? `<img class="markdown-image" src="${esc(src)}" alt="${esc(image.alt)}">`
+      : esc(`![${image.alt}](${image.target})`);
+    x=x.replace(`\u0000IMG${index}\u0000`,replacement);
+  });
   x=x.replace(/`([^`\n]+)`/g,'<code>$1</code>');
   x=x.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
   x=x.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g,'<em>$1</em>');
@@ -613,16 +631,16 @@ function renderOrg(text){
   });
   out.push('</article>');return out.join('\n');
 }
-function renderMarkdown(text,editable=false){
+function renderMarkdown(text,editable=false,imageUrls={}){
   const out=[`<article class="doc"${editable?' contenteditable="true" spellcheck="true"':''}>`];let code=false,buf=[];
   text.split(/\r?\n/).forEach((line,i)=>{
     const attrs=editable?inlineEditAttrs(i):'';
     if(line.startsWith('```')){if(code){out.push(`<pre contenteditable="false"><code>${esc(buf.join('\n'))}</code></pre>`);buf=[]}code=!code;return}
     if(code){buf.push(line);return}
     if(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)){out.push(`<div class="rule-line" ${attrs}>${esc(line.trim())}</div>`);return}
-    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${markdownInline(m[2])}</h${m[1].length}>`);return}
-    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet"><span ${attrs}>${markdownInline(line.replace(/^\s*[-*+]\s+/,''))}</span></div>`);return}
-    out.push(line.trim()?`<p ${attrs}>${markdownInline(line)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
+    const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${markdownInline(m[2],imageUrls)}</h${m[1].length}>`);return}
+    if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet"><span ${attrs}>${markdownInline(line.replace(/^\s*[-*+]\s+/,''),imageUrls)}</span></div>`);return}
+    out.push(line.trim()?`<p ${attrs}>${markdownInline(line,imageUrls)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
   });
   out.push('</article>');return out.join('\n');
 }
@@ -674,6 +692,21 @@ function renderNotebook(text){
   });
   out.push('</article>');
   return out.join('');
+}
+
+async function resolveMarkdownImages(text){
+  const targets=[...String(text||'').matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(match=>match[1]);
+  const entries=await Promise.all(targets.map(async target=>{
+    try{
+      const resolved=await window.workbench.resolveOrgLink({currentPath,target});
+      if(resolved.type!=='file')return null;
+      const info=await window.workbench.fileInfo(resolved.path);
+      if(!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(info.ext))return null;
+      const image=await window.workbench.readImageData(resolved.path);
+      return [target,image.dataUrl];
+    }catch{return null}
+  }));
+  return Object.fromEntries(entries.filter(Boolean));
 }
 
 
@@ -1055,6 +1088,7 @@ function homeDashboard(){
             <div class="syntax-row"><code>* NEXT Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* WAITING Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* SOMEDAY Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>* CANCELLED Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>  SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Planning line beneath a heading</span></div>
             <div class="syntax-row"><code>  DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Planning line beneath a heading</span></div>
           </div>
@@ -1178,7 +1212,7 @@ function previewShell(body){
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
-  .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}.task-text:empty{display:inline-block;min-width:18px;min-height:1em}.task-text:empty:before{content:' ';white-space:pre}
+  .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}.task-text:empty{display:inline-block;min-width:18px;min-height:1em}.task-text:empty:before{content:' ';white-space:pre}.markdown-image{display:block;max-width:100%;height:auto;margin:12px 0}
   .notebook{max-width:1000px}.nb-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #d8dee4}.nb-header h1{border:0;margin:0 0 8px;padding:0;font-size:28px}.nb-header p{margin:0;color:#57606a;font-size:14px;line-height:1.5}
   .nb-empty{padding:28px;border:1px dashed #d0d7de;border-radius:8px;background:#f6f8fa;color:#656d76;text-align:center}
   .nb-markdown{padding:8px 16px;margin:0 0 18px;border-left:3px solid #d8dee4}.nb-markdown>:first-child{margin-top:0}
@@ -1589,7 +1623,7 @@ async function refreshPreview({preserveScroll=false}={}){
   let body;
   if(['.org','.md'].includes(ext))inlineRenderId++;
   if(ext==='.org')body=renderOrg(text);
-  else if(ext==='.md')body=renderMarkdown(text,true);
+  else if(ext==='.md')body=renderMarkdown(text,true,await resolveMarkdownImages(text));
   else if(ext==='.ipynb')body=renderNotebook(text);
   else body=`<article class="doc"><h1>${esc(currentPath.split('/').pop())}</h1><pre><code>${esc(text)}</code></pre></article>`;
   if(preserveScroll && ['.org','.md'].includes(ext)){
@@ -2149,6 +2183,18 @@ document.getElementById('refreshPreviewBtn').onclick=refreshPreview;
 backBtn.onclick=()=>goHistory(-1);
 forwardBtn.onclick=()=>goHistory(1);
 openDefaultBtn.onclick=async()=>{if(!currentPath)return;try{await window.workbench.openDefault(currentPath)}catch(e){showToast(e.message,true)}};
+exportPdfBtn.onclick=async()=>{
+  if(!currentPath||!['.org','.md'].includes(extOf(currentPath)))return;
+  const html=preview.contentDocument?.documentElement?.outerHTML;
+  if(!html){showToast('Rendered view is not ready',true);return}
+  try{
+    const result=await window.workbench.exportRenderedPdf({
+      html,
+      title:currentPath.split('/').pop().replace(/\.[^.]+$/,'')
+    });
+    if(!result.canceled)showToast(`Exported PDF: ${result.path.split('/').pop()}`);
+  }catch(err){showToast(err.message||String(err),true)}
+};
 function sourceLineAtRenderedViewport(){
   try{
     const doc=preview.contentDocument;
