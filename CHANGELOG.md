@@ -8,6 +8,7 @@
 - Added Markdown and Org syntax reference material, keyboard shortcut documentation, and packaged-app verification.
 - Added read-only portability diagnostics, `scripts/doctor.sh`, and the recovery workflow for new Macs and rebuilds.
 - Recorded the tested Node.js 26 and npm 11 environment without upgrading application dependencies.
+- Documented a future mobile companion as separate capture and offline lab-reading use cases; mobile navigation remains intentionally undecided.
 - The 0.9.0 work remains in development and is not yet a frozen release baseline.
 
 ## 0.8.3 final baseline

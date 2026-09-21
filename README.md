@@ -144,6 +144,24 @@ Workbench is intentionally a **navigator + viewer + launcher + lightweight edito
 
 It is not intended to become the place where research data, notes, references, or project metadata have to be migrated. The design is local-first, reversible, and understandable.
 
+## Future mobile companion
+
+The current 0.9 plan leaves room for a lightweight iOS companion rather than a
+full desktop port. Two mobile use cases should remain separate:
+
+- quick capture into the Org inbox, initially prototyped with an Apple Shortcut
+- occasional offline reading of selected Workbench notes and files while in the lab
+
+The phone would not become a second database. Canonical Org files, project files,
+PDFs, code, Zotero data, and DokuWiki would remain outside the app. Mobile
+navigation is intentionally undecided until the desktop workflow has been used
+long enough to show whether retrieval is mostly by search, recent files, pinned
+items, folders, tags, or a reading queue.
+
+The first capture prototype may use a small synced capture folder and a Mac-side
+import step before writing to `~/org/inbox.org`. That keeps the existing local
+files canonical while avoiding an early iOS synchronization architecture.
+
 ## Documentation
 
 - [`RELEASE.md`](RELEASE.md): canonical release and install workflow
