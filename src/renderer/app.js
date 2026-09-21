@@ -822,7 +822,7 @@ async function loadHomeAgendaPreview(){
           agendaDate:currentDate
         });
 
-        if(upcoming.length>=3)break;
+        if(upcoming.length>=6)break;
       }
     }
 
