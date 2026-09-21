@@ -1,4 +1,5 @@
 let currentPath = null;
+let currentOrgTodoStates = ['TODO','DONE','NEXT','WAITING','CANCELLED','SOMEDAY','ACTIVE','IDEA'];
 let currentDir = 'org:/';
 let currentHash = null;
 let dirty = false;
@@ -133,6 +134,7 @@ if(helpMenu){
         <div><code>* CANCELLED Task</code><span>Custom TODO state</span></div>
         <div><code>* ACTIVE Task</code><span>Custom TODO state</span></div>
         <div><code>* IDEA Task</code><span>Custom TODO state</span></div>
+        <div><code>#+TODO: TODO NEXT | DONE</code><span>Declare file-specific states</span></div>
         <div><code>- [ ] Item</code><span>Checkbox</span></div>
         <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
         <div><code>DEADLINE:</code><span>Deadline</span></div>
@@ -599,8 +601,17 @@ function markdownInline(s,imageUrls={}){
   x=x.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g,'<em>$1</em>');
   return x;
 }
+function orgTodoStates(lines){
+  const states=new Set(['TODO','DONE','NEXT','WAITING','CANCELLED','SOMEDAY','ACTIVE','IDEA']);
+  lines.forEach(line=>{
+    const declaration=line.match(/^#\+(?:TODO|SEQ_TODO):\s*(.*)$/i);
+    if(!declaration)return;
+    declaration[1].split(/\s+/).forEach(token=>{if(token&&token!=='|')states.add(token.toUpperCase())});
+  });
+  return [...states];
+}
 function renderOrg(text){
-  const lines=text.split(/\r?\n/);const out=['<article class="doc" contenteditable="true" spellcheck="true">'];let inSrc=false,src=[],lang='';
+  const lines=text.split(/\r?\n/);const states=orgTodoStates(lines);const statePattern=states.map(state=>state.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');const headingState=new RegExp(`^(\\*+)\\s+(${statePattern})(?:\\s+(.*))?$`,'i');const out=['<article class="doc" contenteditable="true" spellcheck="true">'];let inSrc=false,src=[],lang='';
   lines.forEach((line,i)=>{
     if(inSrc){
       if(/^\s*#\+end_src/i.test(line)){out.push(`<pre contenteditable="false"><code>${esc(src.join('\n'))}</code></pre>`);inSrc=false;src=[];return}
@@ -613,7 +624,7 @@ function renderOrg(text){
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
     if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
-    m=line.match(/^(\*+)\s+(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA)(?:\s+(.*))?$/);
+    m=line.match(headingState);
     if(m){
       const state=m[2].toLowerCase();
       const done=state==='done';
@@ -1093,6 +1104,7 @@ function homeDashboard(){
             <div class="syntax-row"><code>* CANCELLED Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* ACTIVE Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* IDEA Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>#+TODO: TODO NEXT | DONE</code><span>Declare file-specific states</span></div>
             <div class="syntax-row"><code>  SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Planning line beneath a heading</span></div>
             <div class="syntax-row"><code>  DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Planning line beneath a heading</span></div>
           </div>
@@ -1626,7 +1638,10 @@ async function refreshPreview({preserveScroll=false}={}){
   }
   let body;
   if(['.org','.md'].includes(ext))inlineRenderId++;
-  if(ext==='.org')body=renderOrg(text);
+  if(ext==='.org'){
+    currentOrgTodoStates=orgTodoStates(text.split(/\r?\n/));
+    body=renderOrg(text);
+  }
   else if(ext==='.md')body=renderMarkdown(text,true,await resolveMarkdownImages(text));
   else if(ext==='.ipynb')body=renderNotebook(text);
   else body=`<article class="doc"><h1>${esc(currentPath.split('/').pop())}</h1><pre><code>${esc(text)}</code></pre></article>`;
@@ -1666,8 +1681,9 @@ function inlineHtmlToSource(html,ext){
   return [...root.childNodes].map(walk).join('');
 }
 function inlinePrefix(line,ext){
+  const states=currentOrgTodoStates.map(state=>state.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
   const pattern=ext==='.org'
-    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
+    ? new RegExp(`^(#\\+TITLE:\\s*|\\*+\\s+(?:${states})(?:\\s+|$)|\\*+\\s+|\\s*[-+]\\s+\\[[ Xx]\\]\\s+|\\s*[-+]\\s+)`,'i')
     : /^(#{1,6}\s+|\s*[-*+]\s+)/;
   return line.match(pattern)?.[0]||'';
 }

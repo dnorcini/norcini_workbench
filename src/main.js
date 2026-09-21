@@ -255,11 +255,25 @@ ipcMain.handle('org-agenda:get', async () => {
     return date >= startDate && date <= endDate;
   }
 
+  function todoStates(lines) {
+    const states = new Set(['TODO', 'DONE', 'NEXT', 'WAITING', 'CANCELLED', 'SOMEDAY', 'ACTIVE', 'IDEA']);
+    for (const line of lines) {
+      const declaration = line.match(/^#\+(?:TODO|SEQ_TODO):\s*(.*)$/i);
+      if (!declaration) continue;
+      declaration[1].split(/\s+/).forEach(token => {
+        if (token && token !== '|') states.add(token.toUpperCase());
+      });
+    }
+    return [...states];
+  }
+
   for (const file of orgFiles) {
     if (!fs.existsSync(file)) continue;
 
     const content = fs.readFileSync(file, 'utf8');
     const lines = content.split(/\r?\n/);
+    const states = todoStates(lines);
+    const statePattern = states.map(state => state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
 
     let currentHeading = '';
     let currentHeadingLine = 1;
@@ -268,7 +282,7 @@ ipcMain.handle('org-agenda:get', async () => {
       const line = lines[i];
 
       const headingMatch =
-        line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA)\s+)?(.*)$/);
+        line.match(new RegExp(`^(\\*+)\\s+(?:(${statePattern})\\s+)?(.*)$`, 'i'));
 
       if (headingMatch) {
         currentHeading = headingMatch[3].trim();
