@@ -641,6 +641,7 @@ function renderOrg(text){
       out.push(`<div class="check-row checkbox-toggle-row" data-line="${i}"><button contenteditable="false" type="button" class="task-toggle" data-line="${i}" data-kind="checkbox">${done?'☑':'☐'}</button><span class="${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[2])}</span></div>`);return;
     }
     m=line.match(/^\s*[-+]\s+(.*)$/);if(m){out.push(`<div class="bullet"><span ${inlineEditAttrs(i)}>${orgInline(m[1])}</span></div>`);return}
+    if(/^\s+\S/.test(line)&&/^\s*[-+]\s+/.test(lines[i-1]||'')){out.push(`<div class="org-continuation"><span ${inlineEditAttrs(i)}>${orgInline(line.trim())}</span></div>`);return}
     if(/^\s*\[[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(line)){out.push(`<div class="timestamp" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     if(!line.trim()){out.push(`<div class="spacer inline-blank" ${inlineEditAttrs(i)}></div>`);return}
     out.push(`<p ${inlineEditAttrs(i)}>${orgInline(line)}</p>`);
@@ -656,6 +657,7 @@ function renderMarkdown(text,editable=false,imageUrls={}){
     if(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)){out.push(`<div class="rule-line" ${attrs}>${esc(line.trim())}</div>`);return}
     const m=line.match(/^(#{1,6})\s+(.*)$/);if(m){out.push(`<h${m[1].length} ${attrs}>${markdownInline(m[2],imageUrls)}</h${m[1].length}>`);return}
     if(/^\s*[-*+]\s+/.test(line)){out.push(`<div class="bullet"><span ${attrs}>${markdownInline(line.replace(/^\s*[-*+]\s+/,''),imageUrls)}</span></div>`);return}
+    if(/^\s+\S/.test(line)&&/^\s*[-*+]\s+/.test(text.split(/\r?\n/)[i-1]||'')){out.push(`<div class="bullet-continuation"><span ${attrs}>${markdownInline(line.trim(),imageUrls)}</span></div>`);return}
     out.push(line.trim()?`<p ${attrs}>${markdownInline(line,imageUrls)}</p>`:editable?`<div class="spacer inline-blank" ${attrs}></div>`:'<div class="spacer"></div>');
   });
   out.push('</article>');return out.join('\n');
@@ -1227,7 +1229,7 @@ function previewShell(body){
   .inline-blank{height:12px;min-height:12px}
   .inline-blank:focus{height:20px}
   .doc{max-width:920px;margin:0 auto;padding:28px 36px 90px}h1,h2,h3,h4{line-height:1.25;margin:24px 0 12px}h1{font-size:2em}h2{font-size:1.5em}
-  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
+  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.org-continuation,.bullet-continuation{padding-left:14px;font-size:15px;line-height:1.6;margin:6px 0}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.task-status-active{color:#0550ae;background:#ddf4ff}.task-status-idea{color:#8250df;background:#fbefff}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
@@ -1699,8 +1701,8 @@ function inlineHtmlToSource(html,ext){
 function inlinePrefix(line,ext){
   const states=currentOrgTodoStates.map(state=>state.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
   const pattern=ext==='.org'
-    ? new RegExp(`^(#\\+TITLE:\\s*|\\*+\\s+(?:${states})(?:\\s+|$)|\\*+\\s+|\\s*[-+]\\s+\\[[ Xx]\\]\\s+|\\s*[-+]\\s+)`,'i')
-    : /^(#{1,6}\s+|\s*[-*+]\s+)/;
+    ? new RegExp(`^(#\\+TITLE:\\s*|\\*+\\s+(?:${states})(?:\\s+|$)|\\*+\\s+|\\s*[-+]\\s+\\[[ Xx]\\]\\s+|\\s*[-+]\\s+|\\s+)`,'i')
+    : /^(#{1,6}\s+|\s*[-*+]\s+|\s+)/;
   return line.match(pattern)?.[0]||'';
 }
 function normalizeInlineSource(value,original,ext){
