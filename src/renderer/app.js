@@ -2205,10 +2205,14 @@ const terminalHost = document.getElementById('terminal');
 terminalHost.addEventListener('mousedown',()=>setTimeout(()=>term.focus(),0));
 terminalHost.addEventListener('click',()=>term.focus());
 
-window.workbench.onTerminalData(({id,data})=>{if(id===terminalId)term.write(data)});
+window.workbench.onTerminalData(({id,data,openPath})=>{
+  if(id!==terminalId)return;
+  if(data)term.write(data);
+  if(openPath)handleWorkbenchOpenPath(openPath);
+});
 window.workbench.onTerminalExit(({id})=>{if(id===terminalId){term.write('\r\n[terminal exited]\r\n');terminalId=null}});
 
-window.workbench.onWorkbenchOpenPath(async ({path,type,source})=>{
+async function handleWorkbenchOpenPath({path,type,source}){
   try{
     const rootName=path.split(':/')[0];
 
@@ -2260,7 +2264,8 @@ window.workbench.onWorkbenchOpenPath(async ({path,type,source})=>{
   }catch(err){
     showToast(err.message||String(err),true);
   }
-});
+}
+window.workbench.onWorkbenchOpenPath(handleWorkbenchOpenPath);
 
 window.addEventListener('resize',()=>setTimeout(resizeTerminal,50));
 
