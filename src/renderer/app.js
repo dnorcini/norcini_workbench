@@ -576,8 +576,10 @@ function orgInline(s,current){
     if(raw.startsWith('file:')) return `<a href="#" class="org-file-link" data-target="${esc(raw.slice(5))}">${label}</a>`;
     return `<span>${label}</span>`;
   });
+  x=x.replace(/(^|[^\w])(SCHEDULED|DEADLINE|CLOSED):/gi,'$1<span class="org-planning-key">$2:</span>');
   x=x.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g,'<strong>$1</strong>');
   x=x.replace(/~([^~\n]+)~/g,'<code>$1</code>');
+  x=x.replace(/\\\\/g,'<br>');
   return x;
 }
 function inlineEditAttrs(line){return `data-inline-line="${line}" data-inline-render="${inlineRenderId}"`}
@@ -599,6 +601,7 @@ function markdownInline(s,imageUrls={}){
   x=x.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
   x=x.replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g,'<em>$1</em>');
   x=x.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g,'<em>$1</em>');
+  x=x.replace(/&lt;br&gt;/gi,'<br>');
   return x;
 }
 function orgTodoStates(lines){
@@ -1372,6 +1375,19 @@ function previewShell(body){
     }
     const block=inlineBlockFrom(e.target)||activeInlineBlock();
     if(!block||!['Enter','Backspace','Delete'].includes(e.key))return;
+    if(e.key==='Enter'&&e.shiftKey){
+      const split=splitInlineSelection(block);
+      if(!split)return;
+      e.preventDefault();
+      split.range.deleteContents();
+      const br=document.createElement('br');
+      split.range.insertNode(br);
+      split.range.setStartAfter(br);split.range.collapse(true);
+      const selection=window.getSelection();
+      selection.removeAllRanges();selection.addRange(split.range);
+      block.dispatchEvent(new Event('input',{bubbles:true}));
+      return;
+    }
     if((e.key==='Backspace'||e.key==='Delete')&&!window.getSelection().isCollapsed){
       const cross=crossInlineSelection();
       if(cross){
@@ -1662,7 +1678,7 @@ function inlineHtmlToSource(html,ext){
     if(node.nodeType===Node.TEXT_NODE)return node.nodeValue;
     if(node.nodeType!==Node.ELEMENT_NODE)return '';
     const tag=node.tagName.toLowerCase();
-    if(tag==='br')return '';
+    if(tag==='br')return ext==='.org'?'\\\\':'<br>';
     const value=[...node.childNodes].map(walk).join('');
     if(ext==='.org'){
       if(tag==='strong'||tag==='b')return `*${value}*`;
