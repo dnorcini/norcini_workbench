@@ -613,9 +613,17 @@ function orgTodoStates(lines){
   });
   return [...states];
 }
+function orgTableCells(line){
+  const body=line.trim().replace(/^\|/,'').replace(/\|$/,'');
+  return body.split('|').map(cell=>cell.trim());
+}
+function orgTableSeparator(cells){
+  return cells.length>0&&cells.every(cell=>/^[-+:]+$/.test(cell));
+}
 function renderOrg(text){
-  const lines=text.split(/\r?\n/);const states=orgTodoStates(lines);const statePattern=states.map(state=>state.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');const headingState=new RegExp(`^(\\*+)\\s+(${statePattern})(?:\\s+(.*))?$`,'i');const out=['<article class="doc" contenteditable="true" spellcheck="true">'];let inSrc=false,src=[],lang='';
+  const lines=text.split(/\r?\n/);const states=orgTodoStates(lines);const statePattern=states.map(state=>state.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');const headingState=new RegExp(`^(\\*+)\\s+(${statePattern})(?:\\s+(.*))?$`,'i');const out=['<article class="doc" contenteditable="true" spellcheck="true">'];let inSrc=false,src=[],lang='',tableEnd=-1;
   lines.forEach((line,i)=>{
+    if(i<tableEnd)return;
     if(inSrc){
       if(/^\s*#\+end_src/i.test(line)){out.push(`<pre contenteditable="false"><code>${esc(src.join('\n'))}</code></pre>`);inSrc=false;src=[];return}
       src.push(line);return;
@@ -624,6 +632,18 @@ function renderOrg(text){
     if(m){inSrc=true;lang=m[1]||'';return}
     m=line.match(/^#\+TITLE:\s*(.*)$/i);if(m){out.push(`<h1 ${inlineEditAttrs(i)}>${orgInline(m[1])}</h1>`);return}
     if(/^#\+/.test(line))return;
+    if(/^\s*\|/.test(line)&&!/^\s*\|?\s*[-+:]+(?:\s*\|\s*[-+:]+)+\s*\|?\s*$/.test(line)&&(i===0||!/^\s*\|/.test(lines[i-1]||''))){
+      const rows=[];let end=i;
+      while(end<lines.length&&/^\s*\|/.test(lines[end])){rows.push(orgTableCells(lines[end]));end++}
+      tableEnd=end;
+      const body=rows.map((cells,rowIndex)=>{
+        if(orgTableSeparator(cells))return '';
+        const tag=rowIndex===0?'th':'td';
+        return `<tr>${cells.map(cell=>`<${tag}>${orgInline(cell)||'&nbsp;'}</${tag}>`).join('')}</tr>`;
+      }).filter(Boolean).join('');
+      out.push(`<table class="org-table" contenteditable="false"><tbody>${body}</tbody></table>`);
+      return;
+    }
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
     if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
@@ -1150,7 +1170,7 @@ function homeDashboard(){
 
           <div class="syntax-section">
             <h3>Tables and source blocks</h3>
-            <div class="syntax-row"><code>| Name | Value |</code><span>Org table source is preserved; table layout is not rendered yet</span></div>
+            <div class="syntax-row"><code>| Name | Value |</code><span>Org table rendered with links and empty cells preserved</span></div>
             <div class="syntax-row"><code>#+begin_src python</code><span>Source block rendered as read-only code</span></div>
           </div>
 
@@ -1229,7 +1249,7 @@ function previewShell(body){
   .inline-blank{height:12px;min-height:12px}
   .inline-blank:focus{height:20px}
   .doc{max-width:920px;margin:0 auto;padding:28px 36px 90px}h1,h2,h3,h4{line-height:1.25;margin:24px 0 12px}h1{font-size:2em}h2{font-size:1.5em}
-  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.org-continuation,.bullet-continuation{padding-left:14px;font-size:15px;line-height:1.6;margin:6px 0}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
+  p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.org-continuation,.bullet-continuation{padding-left:14px;font-size:15px;line-height:1.6;margin:6px 0}.org-table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}.org-table th,.org-table td{border:1px solid #d0d7de;padding:6px 9px;text-align:left;vertical-align:top}.org-table th{background:#f6f8fa;font-weight:700}.org-table td:empty:after{content:' ';white-space:pre}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.task-status-active{color:#0550ae;background:#ddf4ff}.task-status-idea{color:#8250df;background:#fbefff}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
