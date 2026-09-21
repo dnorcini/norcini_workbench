@@ -126,6 +126,7 @@ if(helpMenu){
         <strong>Org syntax</strong>
         <div><code>* Heading</code><span>Heading</span></div>
         <div><code>* TODO Task</code><span>Task</span></div>
+        <div><code>* SOMEDAY Task</code><span>Custom TODO state</span></div>
         <div><code>- [ ] Item</code><span>Checkbox</span></div>
         <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
         <div><code>DEADLINE:</code><span>Deadline</span></div>
@@ -592,10 +593,12 @@ function renderOrg(text){
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
     if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
-    m=line.match(/^(\*+)\s+(TODO|DONE)(?:\s+(.*))?$/);
+    m=line.match(/^(\*+)\s+(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY)(?:\s+(.*))?$/);
     if(m){
-      const done=m[2]==='DONE';
-      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button contenteditable="false" class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span contenteditable="false" class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3]||'')}</span></div>`);
+      const state=m[2].toLowerCase();
+      const done=state==='done';
+      const toggle=(state==='todo'||done)?`<button contenteditable="false" class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button>`:'';
+      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}">${toggle}<span contenteditable="false" class="task-status ${state==='done'?'done':''} task-status-${state}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3]||'')}</span></div>`);
       return;
     }
     m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l} ${inlineEditAttrs(i)}>${orgInline(m[2])}</h${l}>`);return}
@@ -1049,6 +1052,9 @@ function homeDashboard(){
             <h3>Tasks</h3>
             <div class="syntax-row"><code>* TODO Task</code><span>Open task</span></div>
             <div class="syntax-row"><code>* DONE Task</code><span>Completed task</span></div>
+            <div class="syntax-row"><code>* NEXT Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>* WAITING Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>* SOMEDAY Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>  SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Planning line beneath a heading</span></div>
             <div class="syntax-row"><code>  DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Planning line beneath a heading</span></div>
           </div>
@@ -1171,8 +1177,8 @@ function previewShell(body){
   p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
-  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
-  .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}
+  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
+  .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}.task-text:empty{display:inline-block;min-width:18px;min-height:1em}.task-text:empty:before{content:' ';white-space:pre}
   .notebook{max-width:1000px}.nb-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #d8dee4}.nb-header h1{border:0;margin:0 0 8px;padding:0;font-size:28px}.nb-header p{margin:0;color:#57606a;font-size:14px;line-height:1.5}
   .nb-empty{padding:28px;border:1px dashed #d0d7de;border-radius:8px;background:#f6f8fa;color:#656d76;text-align:center}
   .nb-markdown{padding:8px 16px;margin:0 0 18px;border-left:3px solid #d8dee4}.nb-markdown>:first-child{margin-top:0}
@@ -1326,6 +1332,11 @@ function previewShell(body){
     }
     const split=splitInlineSelection(block);
     if(!split)return;
+    if((e.key==='Backspace'||e.key==='Delete')&&split.range.collapsed&&!split.beforeText&&!split.afterText&&block.classList.contains('task-text')){
+      e.preventDefault();
+      parent.postMessage({type:'inlineDeleteLine',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender)},'*');
+      return;
+    }
     if(e.key==='Backspace'&&split.range.collapsed&&!split.beforeText){
       e.preventDefault();parent.postMessage({type:'inlineBackspace',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender)},'*');return;
     }
@@ -1355,6 +1366,14 @@ function previewShell(body){
     parent.postMessage({type:'inlinePaste',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),beforeHtml:split.beforeHtml,afterHtml:split.afterHtml,text:value},'*');
   });
   document.addEventListener('click',e=>{
+    const empty=e.target.closest('[data-inline-line]');
+    if(empty&&!empty.textContent){
+      e.preventDefault();
+      empty.focus();
+      const range=document.createRange();range.selectNodeContents(empty);range.collapse(true);
+      const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+      return;
+    }
     const t=e.target.closest('.task-toggle');if(t){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(t.dataset.line),kind:t.dataset.kind},'*');return}
     const c=e.target.closest('.checkbox-toggle-row');if(c&&!e.target.closest('[data-inline-line]')){e.preventDefault();parent.postMessage({type:'toggleTask',line:Number(c.dataset.line),kind:'checkbox'},'*');return}
     const w=e.target.closest('a[data-web]');if(w){e.preventDefault();parent.postMessage({type:'openWeb',url:w.dataset.web},'*');return}
@@ -1610,7 +1629,7 @@ function inlineHtmlToSource(html,ext){
 }
 function inlinePrefix(line,ext){
   const pattern=ext==='.org'
-    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
+    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
     : /^(#{1,6}\s+|\s*[-*+]\s+)/;
   return line.match(pattern)?.[0]||'';
 }
@@ -1753,6 +1772,18 @@ async function deleteInlineRange(startLine,endLine,beforeHtml,afterHtml){
   preview.addEventListener('load',focusJoined,{once:true});
   await refreshPreview({preserveScroll:true});
 }
+async function deleteInlineLine(line){
+  if(!['.org','.md'].includes(extOf(currentPath)))return;
+  const lines=editor.value.split('\n');
+  if(!Number.isInteger(line)||line<0||line>=lines.length)return;
+  lines.splice(line,1);
+  if(!lines.length)lines.push('');
+  editor.value=lines.join('\n');
+  recordInlineHistory();
+  markDirty(true);
+  scheduleInlineSave();
+  await refreshPreview({preserveScroll:true});
+}
 async function backspaceInline(line){
   if(!['.org','.md'].includes(extOf(currentPath)))return;
   const lines=editor.value.split('\n');
@@ -1829,6 +1860,9 @@ window.addEventListener('message',async e=>{
   }else if(e.data.type==='inlineDeleteRange'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     await deleteInlineRange(e.data.startLine,e.data.endLine,e.data.beforeHtml,e.data.afterHtml);
+  }else if(e.data.type==='inlineDeleteLine'){
+    if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
+    await deleteInlineLine(e.data.line);
   }else if(e.data.type==='inlineBackspace'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     await backspaceInline(e.data.line);
@@ -2136,11 +2170,21 @@ document.getElementById('toggleEditorBtn').onclick=()=>{
   setEditorVisible(!editorVisible);
   if(showSource){
     requestAnimationFrame(()=>{
+      let offset=0;
       if(Number.isInteger(line)){
-        const lineHeight=parseFloat(getComputedStyle(editor).lineHeight)||20;
-        editor.scrollTop=Math.max(0,(line-2)*lineHeight);
+        const lines=editor.value.split('\n');
+        for(let i=0;i<line&&i<lines.length;i++)offset+=lines[i].length+1;
       }
       editor.focus();
+      if(Number.isInteger(line)){
+        editor.selectionStart=offset;
+        editor.selectionEnd=offset;
+        const lineHeight=parseFloat(getComputedStyle(editor).lineHeight)||20;
+        editor.scrollTop=Math.max(0,(line-2)*lineHeight);
+      }else{
+        editor.selectionStart=editor.selectionEnd=0;
+        editor.scrollTop=0;
+      }
     });
   }
 };

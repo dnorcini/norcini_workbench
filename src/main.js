@@ -268,7 +268,7 @@ ipcMain.handle('org-agenda:get', async () => {
       const line = lines[i];
 
       const headingMatch =
-        line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAITING|CANCELLED)\s+)?(.*)$/);
+        line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY)\s+)?(.*)$/);
 
       if (headingMatch) {
         currentHeading = headingMatch[3].trim();
