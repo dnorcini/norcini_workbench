@@ -1151,37 +1151,37 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
           const requested = path.resolve(match[2].replace(/[\r\n]+$/g, ''));
           const virt = virtualize(requested);
 
-          if (virt && fs.existsSync(requested)) {
+          if (
+            virt &&
+            fs.existsSync(requested) &&
+            terminalSender &&
+            !terminalSender.isDestroyed()
+          ) {
             const st = fs.statSync(requested);
-            const sendOpenPath = payload => {
-              try {
-                if (terminalSender && !terminalSender.isDestroyed()) {
-                  terminalSender.send('workbench-open-path', payload);
-                  return;
-                }
-              } catch {}
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('workbench-open-path', payload);
-              }
-            };
 
             if (
               kind === '778;workbench-cwd' &&
               st.isDirectory()
             ) {
-              sendOpenPath({
+              terminalSender.send(
+                'workbench-open-path',
+                {
                   path: virt,
                   type: 'dir',
                   source: 'cwd'
-              });
+                }
+              );
             }
 
             if (kind === '777;workbench-open') {
-              sendOpenPath({
+              terminalSender.send(
+                'workbench-open-path',
+                {
                   path: virt,
                   type: st.isDirectory() ? 'dir' : 'file',
                   source: 'wb'
-              });
+                }
+              );
             }
           }
         } catch {}
