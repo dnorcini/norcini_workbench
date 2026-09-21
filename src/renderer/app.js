@@ -131,6 +131,8 @@ if(helpMenu){
         <div><code>* WAITING Task</code><span>Custom TODO state</span></div>
         <div><code>* SOMEDAY Task</code><span>Custom TODO state</span></div>
         <div><code>* CANCELLED Task</code><span>Custom TODO state</span></div>
+        <div><code>* ACTIVE Task</code><span>Custom TODO state</span></div>
+        <div><code>* IDEA Task</code><span>Custom TODO state</span></div>
         <div><code>- [ ] Item</code><span>Checkbox</span></div>
         <div><code>SCHEDULED:</code><span>Scheduled date</span></div>
         <div><code>DEADLINE:</code><span>Deadline</span></div>
@@ -611,7 +613,7 @@ function renderOrg(text){
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
     if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
-    m=line.match(/^(\*+)\s+(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY)(?:\s+(.*))?$/);
+    m=line.match(/^(\*+)\s+(TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA)(?:\s+(.*))?$/);
     if(m){
       const state=m[2].toLowerCase();
       const done=state==='done';
@@ -1089,6 +1091,8 @@ function homeDashboard(){
             <div class="syntax-row"><code>* WAITING Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* SOMEDAY Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>* CANCELLED Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>* ACTIVE Task</code><span>Common custom TODO state</span></div>
+            <div class="syntax-row"><code>* IDEA Task</code><span>Common custom TODO state</span></div>
             <div class="syntax-row"><code>  SCHEDULED: &lt;2026-09-21 Mon&gt;</code><span>Planning line beneath a heading</span></div>
             <div class="syntax-row"><code>  DEADLINE: &lt;2026-09-25 Fri&gt;</code><span>Planning line beneath a heading</span></div>
           </div>
@@ -1211,7 +1215,7 @@ function previewShell(body){
   p,.bullet,.check-row,.task-row{font-size:15px;line-height:1.6;margin:6px 0}.spacer{height:6px}.bullet{padding-left:14px}.bullet:before{content:'•';display:inline-block;width:14px;margin-left:-14px}.task-text,.check-row [data-inline-line]{min-width:0;flex:1;overflow-wrap:anywhere}.rule-line{height:18px;margin:18px 0 10px;border-top:1px solid #d8dee4;color:transparent;line-height:1px}.rule-line:focus{color:#57606a;outline:none}
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
-  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
+  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status-todo{color:#9a6700;background:#fff8c5}.task-status-next{color:#0550ae;background:#ddf4ff}.task-status-waiting{color:#8250df;background:#fbefff}.task-status-cancelled{color:#8c959f;background:#f6f8fa}.task-status-someday{color:#9a6700;background:#fff8c5}.task-status-active{color:#0550ae;background:#ddf4ff}.task-status-idea{color:#8250df;background:#fbefff}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
   .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}.task-text:empty{display:inline-block;min-width:18px;min-height:1em}.task-text:empty:before{content:' ';white-space:pre}.markdown-image{display:block;max-width:100%;height:auto;margin:12px 0}
   .notebook{max-width:1000px}.nb-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #d8dee4}.nb-header h1{border:0;margin:0 0 8px;padding:0;font-size:28px}.nb-header p{margin:0;color:#57606a;font-size:14px;line-height:1.5}
   .nb-empty{padding:28px;border:1px dashed #d0d7de;border-radius:8px;background:#f6f8fa;color:#656d76;text-align:center}
@@ -1663,7 +1667,7 @@ function inlineHtmlToSource(html,ext){
 }
 function inlinePrefix(line,ext){
   const pattern=ext==='.org'
-    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
+    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
     : /^(#{1,6}\s+|\s*[-*+]\s+)/;
   return line.match(pattern)?.[0]||'';
 }
