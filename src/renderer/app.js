@@ -16,6 +16,9 @@ let homeShortcutsHash = null;
 let inlineRenderId = 0;
 let helpReturnNavIndex = null;
 let suppressFsReloadUntil = 0;
+let inlineHistory = [];
+let inlineHistoryIndex = -1;
+let applyingInlineHistory = false;
 const lastRunStartedAt = new Map();
 
 const workspace = document.getElementById('workspace');
@@ -40,6 +43,30 @@ const createItemName = document.getElementById('createItemName');
 const contextMenu = document.getElementById('contextMenu');
 const systemCheckDialog = document.getElementById('systemCheckDialog');
 const systemCheckResults = document.getElementById('systemCheckResults');
+
+function resetInlineHistory(value){
+  inlineHistory=[String(value??'')];
+  inlineHistoryIndex=0;
+}
+function recordInlineHistory(){
+  if(applyingInlineHistory)return;
+  const value=editor.value;
+  if(inlineHistory[inlineHistoryIndex]===value)return;
+  inlineHistory=inlineHistory.slice(0,inlineHistoryIndex+1);
+  inlineHistory.push(value);
+  inlineHistoryIndex+=1;
+}
+async function moveInlineHistory(delta){
+  const target=inlineHistoryIndex+delta;
+  if(target<0||target>=inlineHistory.length)return;
+  applyingInlineHistory=true;
+  editor.value=inlineHistory[target];
+  inlineHistoryIndex=target;
+  applyingInlineHistory=false;
+  markDirty(true);
+  scheduleInlineSave();
+  await refreshPreview({preserveScroll:true});
+}
 
 const helpMenu=document.getElementById('helpMenu');
 
@@ -313,6 +340,7 @@ async function openFile(vpath,record=true,skipAbandon=false){
   editorTitle.textContent=vpath;
   editor.readOnly=data.binary;
   editor.value=data.binary?'(Binary file: use rendered view)':''+data.content;
+  resetInlineHistory(editor.value);
   editor.scrollTop=0;
   editor.scrollLeft=0;
   editor.selectionStart=0;
@@ -564,10 +592,10 @@ function renderOrg(text){
     if(/^\s*-{3,}\s*$/.test(line)){out.push(`<div class="rule-line" ${inlineEditAttrs(i)}>${esc(line.trim())}</div>`);return}
     m=line.match(/^\s*(SCHEDULED|DEADLINE|CLOSED):\s*(<[^>]+>.*)$/i);
     if(m){out.push(`<div class="org-planning" ${inlineEditAttrs(i)}><span class="org-planning-key">${esc(m[1].toUpperCase())}:</span> <span>${esc(m[2])}</span></div>`);return}
-    m=line.match(/^(\*+)\s+(TODO|DONE)\s+(.*)$/);
+    m=line.match(/^(\*+)\s+(TODO|DONE)(?:\s+(.*))?$/);
     if(m){
       const done=m[2]==='DONE';
-      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button contenteditable="false" class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span contenteditable="false" class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3])}</span></div>`);
+      out.push(`<div class="task-row task-level-${Math.min(m[1].length,5)}"><button contenteditable="false" class="task-toggle" data-line="${i}" data-kind="todo">${done?'☑':'☐'}</button><span contenteditable="false" class="task-status ${done?'done':'todo'}">${m[2]}</span><span class="task-text ${done?'done-text':''}" ${inlineEditAttrs(i)}>${orgInline(m[3]||'')}</span></div>`);
       return;
     }
     m=line.match(/^(\*+)\s+(.*)$/);if(m){const l=Math.min(m[1].length+1,6);out.push(`<h${l} ${inlineEditAttrs(i)}>${orgInline(m[2])}</h${l}>`);return}
@@ -1144,6 +1172,7 @@ function previewShell(body){
   pre{background:#f6f8fa;border:1px solid #d8dee4;border-radius:6px;padding:14px;overflow:auto;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff1f3;border-radius:4px;padding:.1em .25em}pre code{background:transparent;padding:0}
   a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.task-row,.check-row{display:flex;align-items:flex-start;gap:8px}.checkbox-toggle-row{cursor:pointer}.checkbox-toggle-row:hover{background:#f6f8fa;border-radius:5px}.task-toggle{border:0;background:transparent;font-size:18px;line-height:1;padding:2px;color:#57606a;cursor:pointer}.task-status{font-size:11px;border:1px solid #d0d7de;border-radius:999px;padding:1px 6px;margin-top:3px}.task-status.done{color:#1a7f37;background:#dafbe1}.task-status.todo{color:#9a6700;background:#fff8c5}.done-text{text-decoration:line-through;color:#8c959f}.timestamp{color:#6e7781;font-size:12px;margin:3px 0 8px}
+  .org-planning{margin:2px 0 8px;padding-left:18px;color:#57606a;font-size:.92em}.org-planning-key{color:#0aa;font-weight:700}
   .notebook{max-width:1000px}.nb-header{margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #d8dee4}.nb-header h1{border:0;margin:0 0 8px;padding:0;font-size:28px}.nb-header p{margin:0;color:#57606a;font-size:14px;line-height:1.5}
   .nb-empty{padding:28px;border:1px dashed #d0d7de;border-radius:8px;background:#f6f8fa;color:#656d76;text-align:center}
   .nb-markdown{padding:8px 16px;margin:0 0 18px;border-left:3px solid #d8dee4}.nb-markdown>:first-child{margin-top:0}
@@ -1243,6 +1272,7 @@ function previewShell(body){
     const selection=window.getSelection();
     return selection?.rangeCount?inlineBlockFrom(selection.anchorNode):null;
   }
+  document.addEventListener('pointerdown',()=>parent.postMessage({type:'previewPointerDown'},'*'));
   document.addEventListener('input',e=>{
     const block=inlineBlockFrom(e.target)||activeInlineBlock();
     if(block)parent.postMessage({type:'inlineInput',line:Number(block.dataset.inlineLine),renderId:Number(block.dataset.inlineRender),html:block.innerHTML},'*');
@@ -1276,6 +1306,11 @@ function previewShell(body){
     };
   }
   document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){
+      e.preventDefault();
+      parent.postMessage({type:e.shiftKey?'inlineRedo':'inlineUndo'},'*');
+      return;
+    }
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){
       e.preventDefault();parent.postMessage({type:'inlineSave'},'*');return;
     }
@@ -1575,7 +1610,7 @@ function inlineHtmlToSource(html,ext){
 }
 function inlinePrefix(line,ext){
   const pattern=ext==='.org'
-    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE)\s+|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
+    ? /^(#\+TITLE:\s*|\*+\s+(?:TODO|DONE)(?:\s+|$)|\*+\s+|\s*[-+]\s+\[[ Xx]\]\s+|\s*[-+]\s+)/i
     : /^(#{1,6}\s+|\s*[-*+]\s+)/;
   return line.match(pattern)?.[0]||'';
 }
@@ -1613,6 +1648,7 @@ function updateInlineLine(line,html){
   if(next===lines[line])return;
   lines[line]=next;
   editor.value=lines.join('\n');
+  recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
 }
@@ -1630,6 +1666,7 @@ async function insertInlineLine(line,beforeHtml,afterHtml){
   if(!beforeSource.trim()&&!afterSource.trim()&&listMarker.test(original)){
     lines[line]='';
     editor.value=lines.join('\n');
+    recordInlineHistory();
     markDirty(true);
     scheduleInlineSave();
     const focusBlank=()=>{
@@ -1650,6 +1687,7 @@ async function insertInlineLine(line,beforeHtml,afterHtml){
     nextInlinePrefix(original,ext)+afterSource
   );
   editor.value=lines.join('\n');
+  recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
   const focusNew=()=>{
@@ -1676,6 +1714,7 @@ async function pasteInlineLines(line,beforeHtml,afterHtml,text){
   const last=pieces[pieces.length-1]+inlineHtmlToSource(afterHtml,ext);
   lines.splice(line,1,first,...pieces.slice(1,-1),last);
   editor.value=lines.join('\n');
+  recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
   const focusLast=()=>{
@@ -1699,6 +1738,7 @@ async function deleteInlineRange(startLine,endLine,beforeHtml,afterHtml){
     inlinePrefix(lines[startLine],ext)+inlineHtmlToSource(beforeHtml,ext)+inlineHtmlToSource(afterHtml,ext)
   );
   editor.value=lines.join('\n');
+  recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
   const focusJoined=()=>{
@@ -1724,6 +1764,7 @@ async function backspaceInline(line){
   if(marker){
     lines[line]=lines[line].slice(marker[0].length);
     editor.value=lines.join('\n');
+    recordInlineHistory();
     markDirty(true);
     scheduleInlineSave();
     const focusLine=()=>{
@@ -1751,6 +1792,7 @@ async function joinInlineLines(line,direction){
   const next=lines[left]+lines[right].slice(inlinePrefix(lines[right],extOf(currentPath)).length);
   lines.splice(left,2,next);
   editor.value=lines.join('\n');
+  recordInlineHistory();
   markDirty(true);
   scheduleInlineSave();
   const focusJoined=()=>{
@@ -1767,9 +1809,17 @@ async function joinInlineLines(line,direction){
 }
 window.addEventListener('message',async e=>{
   if(!e.data)return;
-  if(e.data.type==='inlineInput'){
+  if(e.data.type==='previewPointerDown'){
+    if(e.source===preview.contentWindow)helpMenu.removeAttribute('open');
+  }else if(e.data.type==='inlineInput'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     updateInlineLine(e.data.line,e.data.html);
+  }else if(e.data.type==='inlineUndo'){
+    if(e.source!==preview.contentWindow)return;
+    await moveInlineHistory(-1);
+  }else if(e.data.type==='inlineRedo'){
+    if(e.source!==preview.contentWindow)return;
+    await moveInlineHistory(1);
   }else if(e.data.type==='inlineEnter'){
     if(e.source!==preview.contentWindow||e.data.renderId!==inlineRenderId)return;
     await insertInlineLine(e.data.line,e.data.beforeHtml,e.data.afterHtml);
@@ -1809,6 +1859,7 @@ window.addEventListener('message',async e=>{
     });
 
     editor.value=res.content;
+    resetInlineHistory(editor.value);
     currentHash=res.sha256;
     markDirty(false);
 
