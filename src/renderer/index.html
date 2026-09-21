@@ -121,7 +121,10 @@
           <button id="saveBtn">Save</button>
         </div>
       </div>
-      <textarea id="editor" spellcheck="false"></textarea>
+      <div id="editorSurface">
+        <pre id="editorHighlight" aria-hidden="true"></pre>
+        <textarea id="editor" spellcheck="false"></textarea>
+      </div>
     </section>
 
     <div id="editorResize" class="resize-v editor-resize"></div>

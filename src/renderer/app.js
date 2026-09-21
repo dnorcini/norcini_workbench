@@ -26,6 +26,7 @@ const workspace = document.getElementById('workspace');
 const tree = document.getElementById('fileTree');
 const breadcrumbs = document.getElementById('breadcrumbs');
 const editor = document.getElementById('editor');
+const editorHighlight = document.getElementById('editorHighlight');
 const editorTitle = document.getElementById('editorTitle');
 const dirtyDot = document.getElementById('dirtyDot');
 const preview = document.getElementById('preview');
@@ -220,6 +221,36 @@ function showToast(msg, error=false){
   showToast._t=setTimeout(()=>toastEl.hidden=true,2600);
 }
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function highlightSource(){
+  if(!editorHighlight)return;
+  const ext=extOf(currentPath);
+  const enabled=['.org','.md'].includes(ext)&&editorVisible&&!editor.readOnly;
+  editorHighlight.hidden=!enabled;
+  editor.style.color=enabled?'transparent':'var(--text)';
+  editor.style.webkitTextFillColor=enabled?'transparent':'var(--text)';
+  if(!enabled)return;
+  const state='TODO|DONE|NEXT|WAITING|CANCELLED|SOMEDAY|ACTIVE|IDEA';
+  const html=String(editor.value).split('\n').map(line=>{
+    let x=esc(line)||' ';
+    if(ext==='.org'){
+      x=x.replace(/^(\*+)(\s+)/,'<span class="source-heading">$1</span>$2');
+      x=x.replace(new RegExp(`(^|\\s)(${state})(?=\\s|$)`,'g'),'$1<span class="source-state">$2</span>');
+      x=x.replace(/\b(SCHEDULED|DEADLINE|CLOSED):/g,'<span class="source-planning">$1:</span>');
+      x=x.replace(/(\[\[[^\]]+\](?:\[[^\]]+\])?\])/g,'<span class="source-link">$1</span>');
+      x=x.replace(/(^|\s)(#[^\s].*)$/,'$1<span class="source-comment">$2</span>');
+      x=x.replace(/(~[^~\n]+~)/g,'<span class="source-code">$1</span>');
+    }else{
+      x=x.replace(/^(#{1,6})(\s+)/,'<span class="source-heading">$1</span>$2');
+      x=x.replace(/(\[[^\]]+\]\([^)]+\))/g,'<span class="source-link">$1</span>');
+      x=x.replace(/(`[^`\n]+`)/g,'<span class="source-code">$1</span>');
+      x=x.replace(/(\*\*[^*\n]+\*\*|(?<!\w)\*[^*\n]+\*(?!\w))/g,'<span class="source-emphasis">$1</span>');
+    }
+    return x;
+  }).join('\n');
+  editorHighlight.innerHTML=html;
+  editorHighlight.scrollTop=editor.scrollTop;
+  editorHighlight.scrollLeft=editor.scrollLeft;
+}
 function dirname(v){
   const no=v.endsWith('/')?v.slice(0,-1):v;
   const i=no.lastIndexOf('/');
@@ -238,6 +269,7 @@ function setEditorVisible(show){
   editorVisible=show;
   workspace.classList.toggle('editor-hidden',!show);
   document.getElementById('toggleEditorBtn').textContent=show?'Hide source':(currentPath?'Show source':'Quick edit');
+  highlightSource();
   setTimeout(()=>{fitAddon.fit(); resizeTerminal();},50);
 }
 function updateContextActions(){
@@ -352,6 +384,7 @@ async function openFile(vpath,record=true,skipAbandon=false){
   editor.readOnly=data.binary;
   editor.value=data.binary?'(Binary file: use rendered view)':''+data.content;
   resetInlineHistory(editor.value);
+  highlightSource();
   editor.scrollTop=0;
   editor.scrollLeft=0;
   editor.selectionStart=0;
@@ -452,6 +485,7 @@ let autoSaveTimer=null;
 let previewTimer=null;
 
 editor.addEventListener('input',()=>{
+  highlightSource();
   markDirty(true);
 
   const ext=extOf(currentPath);
@@ -481,6 +515,11 @@ editor.addEventListener('input',()=>{
       await buildLatexLive(savingPath,true);
     }
   },1000);
+});
+editor.addEventListener('scroll',()=>{
+  if(!editorHighlight)return;
+  editorHighlight.scrollTop=editor.scrollTop;
+  editorHighlight.scrollLeft=editor.scrollLeft;
 });
 
 function debouncePreview(){
@@ -1600,6 +1639,7 @@ async function renderRootOutputs(){
 }
 
 async function refreshPreview({preserveScroll=false}={}){
+  highlightSource();
   if(!currentPath){if(isHome){const result=await window.workbench.homeShortcuts();homeShortcuts=result.config;homeShortcutsHash=result.sha256;if(result.warning)showToast(result.warning,true);preview.srcdoc=previewShell(homeDashboard())}else{preview.srcdoc=previewShell(`<article class="doc"><h1>${esc(currentDir)}</h1><p>Select a file from Files.</p></article>`)}return}
   const ext=extOf(currentPath);
 
