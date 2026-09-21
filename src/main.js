@@ -1147,7 +1147,7 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
 
         try {
           const kind = match[1];
-          const requested = path.resolve(match[2].replace(/[\r\n]+$/g, ''));
+          const requested = path.resolve(match[2]);
           const virt = virtualize(requested);
 
           if (
