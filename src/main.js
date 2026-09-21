@@ -1140,7 +1140,6 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
         /\x1b\](777;workbench-open|778;workbench-cwd);([^\x07]*)\x07/g;
 
       let clean = '';
-      let openPath = null;
       let last = 0;
       let match;
 
@@ -1154,15 +1153,35 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
 
           if (virt && fs.existsSync(requested)) {
             const st = fs.statSync(requested);
+            const sendOpenPath = payload => {
+              try {
+                if (terminalSender && !terminalSender.isDestroyed()) {
+                  terminalSender.send('workbench-open-path', payload);
+                  return;
+                }
+              } catch {}
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('workbench-open-path', payload);
+              }
+            };
+
             if (
               kind === '778;workbench-cwd' &&
               st.isDirectory()
             ) {
-              openPath = { path: virt, type: 'dir', source: 'cwd' };
+              sendOpenPath({
+                  path: virt,
+                  type: 'dir',
+                  source: 'cwd'
+              });
             }
 
             if (kind === '777;workbench-open') {
-              openPath = { path: virt, type: st.isDirectory() ? 'dir' : 'file', source: 'wb' };
+              sendOpenPath({
+                  path: virt,
+                  type: st.isDirectory() ? 'dir' : 'file',
+                  source: 'wb'
+              });
             }
           }
         } catch {}
@@ -1195,14 +1214,18 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
         terminalOutputBuffer = '';
       }
 
-      if (clean || openPath) {
-        const payload = { id, data: clean, openPath };
-        try {
-          if (terminalSender && !terminalSender.isDestroyed()) terminalSender.send('terminal-data', payload);
-          else if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal-data', payload);
-        } catch {
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('terminal-data', payload);
-        }
+      if (
+        clean &&
+        mainWindow &&
+        !mainWindow.isDestroyed()
+      ) {
+        mainWindow.webContents.send(
+          'terminal-data',
+          {
+            id,
+            data: clean
+          }
+        );
       }
     });
 
