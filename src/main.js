@@ -1166,8 +1166,7 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
                 'workbench-open-path',
                 {
                   path: virt,
-                  type: 'dir',
-                  source: 'cwd'
+                  type: 'dir'
                 }
               );
             }
@@ -1177,8 +1176,7 @@ ipcMain.handle('terminal-create', async (event, { cwdVirtual, cols, rows }) => {
                 'workbench-open-path',
                 {
                   path: virt,
-                  type: st.isDirectory() ? 'dir' : 'file',
-                  source: 'wb'
+                  type: st.isDirectory() ? 'dir' : 'file'
                 }
               );
             }

@@ -2208,12 +2208,12 @@ terminalHost.addEventListener('click',()=>term.focus());
 window.workbench.onTerminalData(({id,data})=>{if(id===terminalId)term.write(data)});
 window.workbench.onTerminalExit(({id})=>{if(id===terminalId){term.write('\r\n[terminal exited]\r\n');terminalId=null}});
 
-window.workbench.onWorkbenchOpenPath(async ({path,type,source})=>{
+window.workbench.onWorkbenchOpenPath(async ({path,type})=>{
   try{
     const rootName=path.split(':/')[0];
 
     if(type==='dir'){
-      await loadDir(path,false,source==='cwd');
+      await loadDir(path,false);
 
       document.querySelectorAll('.root-tab').forEach(btn=>{
         const btnRoot=(btn.dataset.root||'').split(':/')[0];
@@ -2225,6 +2225,7 @@ window.workbench.onWorkbenchOpenPath(async ({path,type,source})=>{
 
     // Open the requested file first.
     await openFile(path);
+    setEditorVisible(true);
 
     // Then force Files to follow the opened file.
     const parentDir=dirname(path);
