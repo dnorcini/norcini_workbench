@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-ROOT = Path.home() / "Documents/tools/norcini_workbench"
+ROOT = Path.home() / "Software/norcini_workbench"
 renderer = ROOT / "src/renderer/app.js"
 
 text = renderer.read_text()

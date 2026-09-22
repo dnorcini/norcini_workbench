@@ -1,6 +1,6 @@
 from pathlib import Path
 
-ROOT = Path.home() / "Documents/tools/norcini_workbench"
+ROOT = Path.home() / "Software/norcini_workbench"
 
 main = ROOT / "src/main.js"
 preload = ROOT / "src/preload.js"
