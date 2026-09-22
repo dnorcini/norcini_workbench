@@ -61,21 +61,21 @@ Before calling a version stable:
 
 The canonical, live Norcini Workbench source tree is:
 
-    ~/Documents/tools/norcini_workbench
+    ~/Software/norcini_workbench
 
 All development, testing, packaging, Git commits, and releases must be
 performed from this directory.
 
 The directory:
 
-    ~/Documents/tools/norcini_workbench_versions_backup
+    ~/Software/norcini_workbench_versions_backup
 
 contains historical snapshots only. Do not edit, build, run releases from,
 or restore `.git` metadata inside these snapshots during normal development.
 
 Before making changes, verify:
 
-    cd ~/Documents/tools/norcini_workbench
+    cd ~/Software/norcini_workbench
     pwd
     git status
     grep '"version"' package.json

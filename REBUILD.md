@@ -21,13 +21,13 @@ If the Xcode Command Line Tools are already installed, macOS will say so.
 Clone the Git repository or copy the release source folder to a permanent location such as:
 
 ```text
-~/Documents/tools/norcini_workbench
+~/Software/norcini_workbench
 ```
 
 ## 3. Install dependencies
 
 ```bash
-cd ~/Documents/tools/norcini_workbench
+cd ~/Software/norcini_workbench
 npm install
 ```
 

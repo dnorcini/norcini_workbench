@@ -71,6 +71,6 @@ Then:
 
 ## Normal update workflow
 
-    cd ~/Documents/tools/norcini_workbench
+    cd ~/Software/norcini_workbench
     git pull
     npm run install:mac

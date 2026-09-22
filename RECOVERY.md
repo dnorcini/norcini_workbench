@@ -14,8 +14,8 @@ and DokuWiki content would still be readable with their normal tools.
 3. Clone the repository and select the recorded Node version:
 
    ```bash
-   git clone https://github.com/dnorcini/norcini_workbench.git ~/Documents/tools/norcini_workbench
-   cd ~/Documents/tools/norcini_workbench
+   git clone https://github.com/dnorcini/norcini_workbench.git ~/Software/norcini_workbench
+   cd ~/Software/norcini_workbench
    nvm use
    npm install
    ```
@@ -42,7 +42,7 @@ keeps the prior app at `/Applications/Norcini Workbench.app.previous`.
 
 ```bash
 xcode-select --install
-cd ~/Documents/tools/norcini_workbench
+cd ~/Software/norcini_workbench
 nvm use
 npm install
 ./scripts/doctor.sh
